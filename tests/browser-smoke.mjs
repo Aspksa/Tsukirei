@@ -83,7 +83,10 @@ try {
   await evaluate("(() => { const el=document.getElementById('city-search-input');el.value='Архитектура';el.dispatchEvent(new Event('input',{bubbles:true}));return true; })()");
   await until(() => evaluate("document.querySelectorAll('.city-search-result').length === 1"), 'city search results');
   await evaluate("document.querySelector('.city-search-result').click(); true");
-  const foundTitle = await evaluate("document.querySelector('.city-detail-title')?.textContent || ''");
+  const foundTitle = await until(async () => {
+    const title = await evaluate("document.querySelector('.city-detail-title')?.textContent || ''");
+    return /Архитектура памяти/.test(title) ? title : null;
+  }, 'camera reaches indexed memory building');
   assert.match(foundTitle, /Архитектура памяти/);
   // Select a real city district, then resolve full text through the local API.
   await evaluate("document.querySelector('.city-district-button').click(); true");
