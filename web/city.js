@@ -144,8 +144,10 @@
         ctx.lineWidth = 1.3;
         polygon(roof, null, ctx.strokeStyle, ctx.lineWidth);
       }
-      const occupied = [roof[0], roof[1], roof[2], roof[3], base[1], base[2], base[3]];
-      hits.push({ id: b.id, polygon: occupied, order: b.x + b.y });
+      // Three convex visible faces. A combined outline self-intersects and breaks hit testing.
+      hits.push({ id: b.id, polygon: [roof[1], roof[2], base[2], base[1]] });
+      hits.push({ id: b.id, polygon: [roof[2], roof[3], base[3], base[2]] });
+      hits.push({ id: b.id, polygon: roof });
       if (headGlow || (pulseUntil > time && !reduced)) {
         const point = project(b.x, b.y, h + 4);
         ctx.fillStyle = highlighted ? '#ffe6b8' : 'rgba(234,184,116,.6)';
