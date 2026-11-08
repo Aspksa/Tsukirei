@@ -3,6 +3,8 @@ import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from '
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connectPostgres, emptyState, validateState, type Note, type Task, type State } from './postgres.ts';
+import { CityWorldService } from './city-world-service.ts';
+import type { WorldKind } from './city-world.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -15,6 +17,12 @@ const endpoint = 'https://foundation-models.api.cloud.ru/v1';
 const port = Number(process.env.PORT ?? 3000);
 let cloudBusy = false;
 const database = await connectPostgres(dataDir);
+const cityWorld = new CityWorldService(async (kind:WorldKind,offset:number,limit:number) => {
+  if(database)return database.pageCity(kind,offset,limit);
+  const state=readLegacyState();
+  const values=kind==='knowledge'?[]:state[kind];
+  return {total:values.length,items:values.slice(offset,offset+limit),revision:null};
+});
 
 class HttpError extends Error {
   status: number;
@@ -30,11 +38,12 @@ async function readState(): Promise<State> {
 // Serialise legacy writes; PostgreSQL uses SELECT ... FOR UPDATE inside a transaction.
 let legacyQueue: Promise<unknown> = Promise.resolve();
 async function mutateState<T>(change: (state: State) => T): Promise<T> {
-  if (database) return database.mutate(change);
+  if (database) { const result=await database.mutate(change); cityWorld.invalidate(); return result; }
   const pending = legacyQueue.then(() => {
     const state = readLegacyState();
     const result = change(state);
     saveAtomic(statePath, state);
+    cityWorld.invalidate();
     return result;
   });
   legacyQueue = pending.catch(() => {});
@@ -150,6 +159,36 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
     json(res, 200, { ok: true, name: 'Tsukirei', version: '0.5.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+  }
+  if (method === 'GET' && pathname === '/api/city/world/status') {
+    json(res,200,cityWorld.status());return;
+  }
+  if (method === 'GET' && pathname === '/api/city/world/tiles') {
+    const params=new URL(req.url??'/','http://127.0.0.1').searchParams;
+    const parse=(key:string,defaultValue:number,min:number,max:number) => {
+      const raw=params.get(key);
+      const value=raw===null?defaultValue:Number(raw);
+      if(!Number.isFinite(value)||value<min||value>max)
+        throw new HttpError(400,'Неверный параметр '+key);
+      return value;
+    };
+    const x=parse('x',0,-1e8,1e8),y=parse('y',0,-1e8,1e8);
+    const radius=parse('radius',900,200,100000);
+    const limit=parse('limit',3500,1,6500);
+    if(!Number.isInteger(limit))throw new HttpError(400,'limit должен быть целым');
+    const data=cityWorld.tiles(x,y,radius,limit);
+    if(!data){json(res,202,cityWorld.status());return;}
+    json(res,200,{ready:true,...data});return;
+  }
+  if (method === 'GET' && pathname === '/api/city/world/search') {
+    const params=new URL(req.url??'/','http://127.0.0.1').searchParams;
+    const q=params.get('q')??'';
+    if(q.length<2||q.length>100)throw new HttpError(400,'Введите от 2 до 100 символов');
+    const data=cityWorld.search(q,14);
+    if(!data){json(res,202,cityWorld.status());return;}
+    json(res,200,{ready:true,items:data.map(b=>({
+      id:b.id,title:b.title,districtName:b.districtName,kind:b.kind,x:b.x,y:b.y
+    }))});return;
   }
   if (method === 'GET' && pathname === '/api/city/entry') {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -302,6 +341,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
     const model = embedding ? requiredText(input.embeddingModel, 'Модель эмбеддингов', 150) : undefined;
     const knowledge = await database.addKnowledge(content, source, metadata as Json, embedding, model);
+    cityWorld.invalidate();
     json(res, 201, { knowledge }); return;
   }
   if (method === 'POST' && pathname === '/api/knowledge/search') {
