@@ -88,7 +88,7 @@ function Install-Node {
         $line = Get-Content -LiteralPath $sums | Where-Object { $_ -match ('\s+' + [regex]::Escape($zipName) + '$') } | Select-Object -First 1
         if (-not $line) { throw 'Не найдена контрольная сумма SHA-256 архива Node.js.' }
         $expected = ($line -split '\s+')[0].ToLowerInvariant()
-        $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = (Get-Sha256 $zip).ToLowerInvariant()
         if ($expected -ne $actual) { throw 'Проверка SHA-256 не пройдена. Архив не используется.' }
         Expand-Archive -LiteralPath $zip -DestinationPath $temporary -Force
         $expanded = Join-Path $temporary $name
@@ -98,6 +98,12 @@ function Install-Node {
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force -ErrorAction SilentlyContinue }
     }
+}
+function Get-Sha256([string]$path) {
+    $hash = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($path)
+    try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-', '') }
+    finally { $stream.Dispose(); $hash.Dispose() }
 }
 function Test-Port([int]$number) {
     $tcp = New-Object Net.Sockets.TcpClient
@@ -188,7 +194,7 @@ try {
     $lock = Join-Path $app 'package-lock.json'
     $deps = Join-Path $app 'node_modules'
     $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
-    $depHash = (Get-FileHash -LiteralPath $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }) -Algorithm SHA256).Hash
+    $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
     $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
     $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
     if (-not $installed) {
@@ -199,7 +205,7 @@ try {
             else { & $node $npmCli install --no-audit --no-fund }
             if ($LASTEXITCODE -ne 0) { throw "Установка npm завершилась с ошибкой (код $LASTEXITCODE)." }
         } finally { Pop-Location }
-        $depHash = (Get-FileHash -LiteralPath $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }) -Algorithm SHA256).Hash
+        $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
         Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
     }
 
