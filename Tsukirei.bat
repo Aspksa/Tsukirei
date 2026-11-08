@@ -14,8 +14,10 @@ set "TSUKIREI_EXIT=%ERRORLEVEL%"
 if not "%TSUKIREI_EXIT%"=="0" (
     echo.
     echo [Tsukirei] Launcher stopped with code %TSUKIREI_EXIT%.
-    echo Press any key to close this window.
-    pause >nul
+    if /I not "%CI%"=="true" (
+        echo Press any key to close this window.
+        pause >nul
+    )
 )
 exit /b %TSUKIREI_EXIT%
 ### TSUKIREI_PS_BEGIN ###
