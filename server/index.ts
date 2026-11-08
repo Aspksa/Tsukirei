@@ -149,7 +149,32 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = req.headers.origin;
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.3.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.4.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+  }
+  if (method === 'GET' && pathname === '/api/city/archive') {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    const kind = url.searchParams.get('kind');
+    if (kind !== 'notes' && kind !== 'messages' && kind !== 'knowledge')
+      throw new HttpError(400, 'kind: notes, messages или knowledge');
+    const offsetRaw = url.searchParams.get('offset') ?? '0';
+    const limitRaw = url.searchParams.get('limit') ?? '200';
+    if (!/^\d{1,9}$/.test(offsetRaw) || !/^\d{1,3}$/.test(limitRaw))
+      throw new HttpError(400, 'offset и limit должны быть целыми числами');
+    const offset = Number(offsetRaw), limit = Number(limitRaw);
+    if (limit < 1 || limit > 200) throw new HttpError(400, 'limit должен быть от 1 до 200');
+    let page: { total: number; items: unknown[]; revision: string | null };
+    if (database) page = await database.pageCity(kind, offset, limit);
+    else {
+      const state = readLegacyState();
+      const rows = kind === 'knowledge' ? [] : state[kind];
+      page = { total: rows.length, items: rows.slice(offset, offset + limit), revision: null };
+    }
+    json(res, 200, {
+      kind, offset, limit, total: page.total,
+      hasMore: offset + page.items.length < page.total,
+      items: page.items, revision: page.revision
+    });
+    return;
   }
   if (method === 'GET' && pathname === '/api/state') {
     const state = await readState();
