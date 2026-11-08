@@ -121,7 +121,7 @@ function dispose(gl,m){
  if(m.ib)gl.deleteBuffer(m.ib);
  if(m.buffer)gl.deleteBuffer(m.buffer);
 }
-function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
+function startCity({canvas,detail,districtsList,onNavigate,onInspect,onCameraChange}){
  const model=root.TsukireiCityModel;
  const gl=canvas.getContext('webgl2',{alpha:false,depth:true,antialias:true});
  if(!model||!gl)return null;
@@ -158,6 +158,13 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  let active=false,lost=false,raf=0,dirty=true,w=1,h=1,dpr=1;
  let yaw=-.64,pitch=.89,distance=950,target=[0,0,0],selected=null;
  let drag=null,moved=false,pickFbo=null,pickTexture=null,pickDepth=null;
+ let cameraTimer=null;
+ function getViewport(){return{x:target[0],y:target[2],radius:Math.max(300,Math.min(100000,distance*1.4)),distance};}
+ function movedCamera(){
+  if(!onCameraChange)return;
+  clearTimeout(cameraTimer);
+  cameraTimer=setTimeout(()=>{if(active)onCameraChange(getViewport());},220);
+ }
 
  function pickBuffer(){
   if(pickFbo){
@@ -316,7 +323,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
    button.addEventListener('click',()=>{
     target=[d.x,30,d.y];distance=Math.max(290,d.size*1.25);
     selected=scene.buildings.find(b=>b.district===d.key)?.id||null;
-    renderDetail();schedule();
+    renderDetail();schedule();movedCamera();
    });
    districtsList.append(button);
   }
@@ -325,9 +332,9 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
    p.textContent='Районы появятся после загрузки записей.';districtsList.append(p);
   }
  }
- function update(state){
+ function applyScene(next,refit){
   const prev=scene.stats.buildings;
-  scene=model.cityFromState(state);
+  scene=next;
   if(scene.stats.buildings>16777214)throw Error('Город превышает предел адресации WebGL');
   if(!scene.buildings.some(b=>b.id===selected))selected=null;
   spatial=root.TsukireiSpatial?.build(scene.buildings)||null;
@@ -340,8 +347,15 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   const count=root.document.getElementById('city-count');
   if(count)count.textContent=scene.stats.buildings+' записей';
   renderDetail();renderDistricts();
-  if(prev!==scene.stats.buildings)fit();
+  if(refit || (prev!==scene.stats.buildings&&scene.buildings.length===scene.stats.buildings))fit();
   schedule();
+ }
+ function update(state){applyScene(model.cityFromState(state),false);}
+ function updateScene(next,refit=false){applyScene(next,refit);}
+ function moveTo(x,y){
+  if(!Number.isFinite(x)||!Number.isFinite(y))return;
+  target=[x,25,y];distance=Math.min(450,Math.max(160,distance));
+  schedule();movedCamera();
  }
  function activate(isActive){
   active=Boolean(isActive);
@@ -370,12 +384,13 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  canvas.addEventListener('pointerup',e=>{
   if(!drag)return;
   if(!moved&&drag.button===0){const p=position(e);selected=pick(p.x,p.y);renderDetail();}
+  if(moved)movedCamera();
   drag=null;
  });
  canvas.addEventListener('pointercancel',()=>{drag=null;});
  canvas.addEventListener('contextmenu',e=>e.preventDefault());
  canvas.addEventListener('wheel',e=>{
-  e.preventDefault();distance=Math.max(55,Math.min(80000,distance*Math.exp(e.deltaY*.001)));schedule();
+  e.preventDefault();distance=Math.max(55,Math.min(80000,distance*Math.exp(e.deltaY*.001)));schedule();movedCamera();
  },{passive:false});
  canvas.addEventListener('keydown',e=>{
   if(e.key==='+'||e.key==='=')distance=Math.max(55,distance*.84);
@@ -385,14 +400,14 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   else if(e.key==='ArrowUp')pitch=Math.min(1.42,pitch+.1);
   else if(e.key==='ArrowDown')pitch=Math.max(.16,pitch-.1);
   else return;
-  e.preventDefault();schedule();
+  e.preventDefault();schedule();movedCamera();
  });
- root.document.getElementById('city-fit')?.addEventListener('click',fit);
+ root.document.getElementById('city-fit')?.addEventListener('click',()=>{fit();movedCamera();});
  root.document.getElementById('city-zoom-in')?.addEventListener('click',()=>{
-  distance=Math.max(55,distance*.80);schedule();
+  distance=Math.max(55,distance*.80);schedule();movedCamera();
  });
  root.document.getElementById('city-zoom-out')?.addEventListener('click',()=>{
-  distance=Math.min(80000,distance*1.25);schedule();
+  distance=Math.min(80000,distance*1.25);schedule();movedCamera();
  });
  canvas.addEventListener('webglcontextlost',e=>{
   e.preventDefault();lost=true;if(raf){root.cancelAnimationFrame(raf);raf=0;}
@@ -430,9 +445,9 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   selected=record.id;
   target=[record.x,Math.max(10,record.height*.35),record.y];
   distance=Math.max(140,Math.min(380,distance));
-  renderDetail();schedule();return true;
+  renderDetail();schedule();movedCamera();return true;
  }
- return{update,activate,search,focus,setQuality,is3D:true,
+ return{update,updateScene,moveTo,getViewport,activate,search,focus,setQuality,is3D:true,
   gpuStats(){return{visible:visibleBuildings.length,total:scene.buildings.length,max:maxGpuBuildings}}};
 }
 root.TsukireiCity3D=Object.freeze({startCity});
