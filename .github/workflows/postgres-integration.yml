@@ -1,0 +1,31 @@
+name: PostgreSQL and pgvector integration
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TSUKIREI_DATABASE_URL: postgresql://postgres:tsukirei-ci-only@127.0.0.1:5432/tsukirei_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install PostgreSQL pgvector extension without Docker
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-16-pgvector
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'tsukirei-ci-only';"
+          sudo -u postgres createdb tsukirei_ci
+      - name: Install Node dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check application syntax
+        run: npm run check
+      - name: Test PostgreSQL migration, transactions and vectors
+        run: node --test tests/postgres.test.mjs
