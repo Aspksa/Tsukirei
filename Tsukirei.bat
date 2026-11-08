@@ -230,12 +230,22 @@ function Ensure-PortablePostgres {
                 try { $pgProcess.Kill() } catch { }
                 throw 'Программа запуска PostgreSQL не завершилась за 120 секунд. Проверьте logs/pg0-*-err.log.'
             }
-            if ($pgProcess.ExitCode -ne 0) {
+            # pg0 may emit a non-zero status after creating an operational
+            # PostgreSQL instance. Confirm the instance itself before deciding.
+            $pgStatusText = (& $exe info --name tsukirei -o json 2>$null | Out-String)
+            $pgInfoOk = ($LASTEXITCODE -eq 0 -and $pgStatusText -match '"running"\s*:\s*true')
+            if (-not $pgInfoOk -or -not (Test-Port ([int]$config.port))) {
                 $pgText = ((Get-ExitText $pgErr) + (Get-ExitText $pgOut)).Replace([string]$config.password, '[скрыто]')
                 throw ('PostgreSQL не запустился: ' + $pgText)
             }
+            if ($pgProcess.ExitCode -ne 0) {
+                Say 'pg0 вывел предупреждения, но PostgreSQL проверен и работает.'
+            }
         } finally {
             $pgProcess.Dispose()
+            # pg0 prints a connection URI containing the generated password.
+            # Keep it only in the ignored settings file, not in the logs.
+            Remove-Item -LiteralPath $pgOut, $pgErr -Force -ErrorAction SilentlyContinue
         }
     }
     if (-not (Test-Port ([int]$config.port))) { throw 'Сервер PostgreSQL не отвечает.' }
