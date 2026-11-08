@@ -9,7 +9,7 @@ test('Tsukirei startup, API, persistence and static assets', { timeout: 40000 },
   const dir = mkdtempSync(join(tmpdir(), 'tsukirei-test-'));
   const child = spawn(process.execPath, ['--experimental-strip-types', 'server/index.ts'], {
     cwd: process.cwd(),
-    env: { ...process.env, PORT: '0', TSUKIREI_DATA_DIR: dir },
+    env: { ...process.env, PORT: '0', TSUKIREI_DATA_DIR: dir, TSUKIREI_DATABASE_URL: '', DATABASE_URL: '' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let stderr = '';
