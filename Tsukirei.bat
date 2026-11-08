@@ -14,8 +14,10 @@ set "TSUKIREI_EXIT=%ERRORLEVEL%"
 if not "%TSUKIREI_EXIT%"=="0" (
     echo.
     echo [Tsukirei] Launcher stopped with code %TSUKIREI_EXIT%.
-    echo Press any key to close this window.
-    pause >nul
+    if /I not "%CI%"=="true" (
+        echo Press any key to close this window.
+        pause >nul
+    )
 )
 exit /b %TSUKIREI_EXIT%
 ### TSUKIREI_PS_BEGIN ###
@@ -104,6 +106,640 @@ function Get-Sha256([string]$path) {
     $stream = [IO.File]::OpenRead($path)
     try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-', '') }
     finally { $stream.Dispose(); $hash.Dispose() }
+}
+function Ensure-PortablePostgres {
+    $data = Join-Path $root 'data'
+    $settings = Join-Path $data 'postgres-settings.json'
+    $managed = Join-Path $data 'portable-postgres.json'
+    if ($env:TSUKIREI_DATABASE_URL -or $env:DATABASE_URL) {
+        Say 'Подключение к существующему PostgreSQL задано через переменную окружения.'
+        return
+    }
+    if ((Test-Path -LiteralPath $settings) -and -not (Test-Path -LiteralPath $managed)) {
+        Say 'Использую пользовательский PostgreSQL из data/postgres-settings.json.'
+        return
+    }
+    if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+        throw 'Переносимый PostgreSQL поддерживает Windows x64. Для другой архитектуры укажите собственный сервер PostgreSQL.'
+    }
+    New-Item -ItemType Directory -Path $data -Force | Out-Null
+
+    $folder = Join-Path $runtime 'pg0'
+    $exe = Join-Path $folder 'pg0.exe'
+    $expectedHash = 'da580cc8fd390ba01158bea192d6bb6d4b0f583abc468ced7f9c582370c34cb6'
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf) -or
+        (Get-Sha256 $exe).ToLowerInvariant() -ne $expectedHash) {
+        Say 'Скачиваю переносимый PostgreSQL + pgvector (pg0 v0.16.1)...'
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+        $download = Join-Path $folder ('download-' + [guid]::NewGuid().ToString('N') + '.exe')
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri 'https://github.com/vectorize-io/pg0/releases/download/v0.16.1/pg0-windows-x86_64.exe' -OutFile $download -UseBasicParsing -TimeoutSec 240
+            if ((Get-Sha256 $download).ToLowerInvariant() -ne $expectedHash) {
+                throw 'Неверная SHA-256 загрузки PostgreSQL. Ничего не запускаю.'
+            }
+            Move-Item -LiteralPath $download -Destination $exe -Force
+        } finally {
+            if (Test-Path -LiteralPath $download) {
+                Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    if (Test-Path -LiteralPath $managed -PathType Leaf) {
+        $config = Get-Content -LiteralPath $managed -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($config.version -ne 1 -or $config.password -notmatch '^[a-f0-9]{64}
+    $tcp = New-Object Net.Sockets.TcpClient
+    try {
+        $async = $tcp.BeginConnect('127.0.0.1', $number, $null, $null)
+        if (-not $async.AsyncWaitHandle.WaitOne(350)) { return $false }
+        $tcp.EndConnect($async)
+        return $true
+    } catch { return $false }
+    finally { $tcp.Close() }
+}
+function Get-ExitText([string]$path) {
+    if (Test-Path -LiteralPath $path) { return (Get-Content -LiteralPath $path -Tail 35 -ErrorAction SilentlyContinue | Out-String) }
+    return ''
+}
+
+if ($help) {
+    Say 'Команды: Tsukirei.bat [--diagnose] [--no-open] [--help]'
+    Say '--diagnose проверяет окружение без установки и запуска приложения.'
+    exit 0
+}
+Say "Папка проекта: $root"
+$app = Find-App
+if ($diagnose) {
+    Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
+    Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
+    $node = Find-Node
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
+    Say "Локальные файлы: $runtime; журналы: $logs"
+    Say "PostgreSQL: $(if (Test-Path -LiteralPath (Join-Path $root 'data/portable-postgres.json')) { 'переносимый настроен' } elseif (Test-Path -LiteralPath (Join-Path $root 'data/postgres-settings.json')) { 'внешний настроен' } else { 'установится автоматически при первом запуске' })"
+    Say 'Диагностика завершена.'
+    exit 0
+}
+if (-not $app) {
+    Say 'Исходники приложения не найдены. Репозиторий пока пустой — это ожидаемо.'
+    Say 'BAT готов. Для запуска сайта нужно добавить исходники и package.json.'
+    Say 'Для проверки запустите Tsukirei.bat --diagnose.'
+    exit 2
+}
+
+$mutex = $null
+$process = $null
+$script:PortablePG0 = $null
+$script:PortablePG0Started = $false
+try {
+    New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant())) }
+    finally { $sha.Dispose() }
+    $name = 'Local\Tsukirei_' + ([BitConverter]::ToString($bytes).Replace('-', '').Substring(0, 24))
+    $mutex = [System.Threading.Mutex]::new($false, $name)
+    if (-not $mutex.WaitOne(0, $false)) { Say 'Этот экземпляр Tsukirei уже запущен.'; exit 3 }
+
+    $node = Find-Node
+    if (-not $node) { $node = Install-Node }
+    $env:PATH = (Split-Path -Parent $node) + ';' + $env:PATH
+    $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
+    if (-not (Test-Path -LiteralPath $npmCli -PathType Leaf)) {
+        throw "Рядом с Node.js не найден npm CLI: $npmCli"
+    }
+    $packageFile = Join-Path $app 'package.json'
+    $package = Get-Content -LiteralPath $packageFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $script = @('dev', 'start', 'preview') | Where-Object { $package.scripts -and $package.scripts.PSObject.Properties.Name -contains $_ } | Select-Object -First 1
+    if (-not $script) { throw 'В package.json нет команды dev, start или preview.' }
+    $scriptContent = [string]$package.scripts.$script
+    $vite = $scriptContent -match '(?i)(^|\s|/|\\)vite(\s|$)'
+    $next = $scriptContent -match '(?i)next\s+dev'
+    $defaultPort = if ($vite) { 5173 } else { 3000 }
+    $port = $defaultPort
+    if ($env:TSUKIREI_PORT) {
+        $candidate = 0
+        if (-not [int]::TryParse($env:TSUKIREI_PORT, [ref]$candidate) -or $candidate -lt 1024 -or $candidate -gt 65535) {
+            throw 'TSUKIREI_PORT должен быть числом от 1024 до 65535.'
+        }
+        $port = $candidate
+    }
+    if (-not $env:TSUKIREI_PORT -and (Test-Port $port)) {
+        $originalPort = $port
+        foreach ($candidate in 3001..3020) {
+            if (-not (Test-Port $candidate)) { $port = $candidate; break }
+        }
+        if ($port -eq $originalPort) { throw 'Все порты 3000–3020 заняты. Укажите свободный TSUKIREI_PORT.' }
+        Say "Порт $originalPort занят. Использую свободный порт $port."
+    }
+    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите свободный TSUKIREI_PORT." }
+    $env:PORT = "$port"
+    $env:HOST = '127.0.0.1'
+    $env:npm_config_cache = Join-Path $runtime 'npm-cache'
+    $env:npm_config_update_notifier = 'false'
+
+    $lock = Join-Path $app 'package-lock.json'
+    $deps = Join-Path $app 'node_modules'
+    $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
+    $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+    $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
+    $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
+    if (-not $installed) {
+        Say 'Устанавливаю или обновляю зависимости приложения...'
+        Push-Location -LiteralPath $app
+        try {
+            if (Test-Path -LiteralPath $lock) { & $node $npmCli ci --no-audit --no-fund }
+            else { & $node $npmCli install --no-audit --no-fund }
+            if ($LASTEXITCODE -ne 0) { throw "Установка npm завершилась с ошибкой (код $LASTEXITCODE)." }
+        } finally { Pop-Location }
+        $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+        Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
+    }
+
+    Ensure-PortablePostgres
+
+    $output = Join-Path $logs "$stamp-out.log"
+    $errors = Join-Path $logs "$stamp-error.log"
+    $args = '"' + $npmCli + '" run ' + $script
+    if ($vite) { $args += " -- --host 127.0.0.1 --port $port --strictPort" }
+    elseif ($next) { $args += " -- --hostname 127.0.0.1 --port $port" }
+    Say "Запускаю npm run $script, порт $port..."
+    Say "Журналы: $output и $errors"
+    $process = Start-Process -FilePath $node -ArgumentList $args -WorkingDirectory $app -RedirectStandardOutput $output -RedirectStandardError $errors -NoNewWindow -PassThru
+    $url = "http://127.0.0.1:$port/"
+    $ready = $false
+    for ($seconds = 0; $seconds -lt 60; $seconds++) {
+        $process.Refresh()
+        if ($process.HasExited) { break }
+        if (Test-Port $port) {
+            try {
+                $response = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
+                if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
+                    $health = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 3
+                    if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') {
+                        $ready = $true
+                        break
+                    }
+                }
+            } catch { }
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $ready) {
+        Say 'Сервер не открылся. Последние строки журналов:'
+        Write-Host (Get-ExitText $errors)
+        Write-Host (Get-ExitText $output)
+        throw 'Приложение не запустилось. Посмотрите ошибки выше.'
+    }
+    Say "Сервер готов: $url"
+    if (-not $noOpen) {
+        try { Start-Process $url | Out-Null }
+        catch { Say "Браузер не открылся автоматически. Откройте вручную: $url" }
+    }
+    Say 'Для остановки нажмите Ctrl+C в этом окне.'
+    while (-not $process.HasExited) { Start-Sleep -Seconds 1; $process.Refresh() }
+    Say "Сервер остановлен (код $($process.ExitCode))."
+    if ($process.ExitCode -ne 0) { Write-Host (Get-ExitText $errors); exit $process.ExitCode }
+} catch {
+    Say "ОШИБКА: $($_.Exception.Message)"
+    try {
+        New-Item -ItemType Directory -Path $logs -Force | Out-Null
+        Add-Content -LiteralPath (Join-Path $logs 'launcher-errors.log') -Value "[$(Get-Date -Format o)] $($_ | Out-String)" -Encoding UTF8
+    } catch { }
+    exit 1
+} finally {
+    if ($process) {
+        try { $process.Refresh(); if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch { }
+        $process.Dispose()
+    }
+    if ($script:PortablePG0Started -and $script:PortablePG0) {
+        try { & $script:PortablePG0 stop --name tsukirei 2>$null | Out-Null } catch { }
+    }
+    if ($mutex) {
+        try { $mutex.ReleaseMutex() } catch { }
+        $mutex.Dispose()
+    }
+}
+exit 0
+ -or
+            $config.port -lt 1024 -or $config.port -gt 65535 -or
+            -not $config.store -or $config.store -cnotmatch '^[\x20-\x7E]+
+    $tcp = New-Object Net.Sockets.TcpClient
+    try {
+        $async = $tcp.BeginConnect('127.0.0.1', $number, $null, $null)
+        if (-not $async.AsyncWaitHandle.WaitOne(350)) { return $false }
+        $tcp.EndConnect($async)
+        return $true
+    } catch { return $false }
+    finally { $tcp.Close() }
+}
+function Get-ExitText([string]$path) {
+    if (Test-Path -LiteralPath $path) { return (Get-Content -LiteralPath $path -Tail 35 -ErrorAction SilentlyContinue | Out-String) }
+    return ''
+}
+
+if ($help) {
+    Say 'Команды: Tsukirei.bat [--diagnose] [--no-open] [--help]'
+    Say '--diagnose проверяет окружение без установки и запуска приложения.'
+    exit 0
+}
+Say "Папка проекта: $root"
+$app = Find-App
+if ($diagnose) {
+    Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
+    Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
+    $node = Find-Node
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
+    Say "Локальные файлы: $runtime; журналы: $logs"
+    Say 'Диагностика завершена.'
+    exit 0
+}
+if (-not $app) {
+    Say 'Исходники приложения не найдены. Репозиторий пока пустой — это ожидаемо.'
+    Say 'BAT готов. Для запуска сайта нужно добавить исходники и package.json.'
+    Say 'Для проверки запустите Tsukirei.bat --diagnose.'
+    exit 2
+}
+
+$mutex = $null
+$process = $null
+try {
+    New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant())) }
+    finally { $sha.Dispose() }
+    $name = 'Local\Tsukirei_' + ([BitConverter]::ToString($bytes).Replace('-', '').Substring(0, 24))
+    $mutex = [System.Threading.Mutex]::new($false, $name)
+    if (-not $mutex.WaitOne(0, $false)) { Say 'Этот экземпляр Tsukirei уже запущен.'; exit 3 }
+
+    $node = Find-Node
+    if (-not $node) { $node = Install-Node }
+    $env:PATH = (Split-Path -Parent $node) + ';' + $env:PATH
+    $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
+    if (-not (Test-Path -LiteralPath $npmCli -PathType Leaf)) {
+        throw "Рядом с Node.js не найден npm CLI: $npmCli"
+    }
+    $packageFile = Join-Path $app 'package.json'
+    $package = Get-Content -LiteralPath $packageFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $script = @('dev', 'start', 'preview') | Where-Object { $package.scripts -and $package.scripts.PSObject.Properties.Name -contains $_ } | Select-Object -First 1
+    if (-not $script) { throw 'В package.json нет команды dev, start или preview.' }
+    $scriptContent = [string]$package.scripts.$script
+    $vite = $scriptContent -match '(?i)(^|\s|/|\\)vite(\s|$)'
+    $next = $scriptContent -match '(?i)next\s+dev'
+    $defaultPort = if ($vite) { 5173 } else { 3000 }
+    $port = $defaultPort
+    if ($env:TSUKIREI_PORT) {
+        $candidate = 0
+        if (-not [int]::TryParse($env:TSUKIREI_PORT, [ref]$candidate) -or $candidate -lt 1024 -or $candidate -gt 65535) {
+            throw 'TSUKIREI_PORT должен быть числом от 1024 до 65535.'
+        }
+        $port = $candidate
+    }
+    if (-not $env:TSUKIREI_PORT -and (Test-Port $port)) {
+        $originalPort = $port
+        foreach ($candidate in 3001..3020) {
+            if (-not (Test-Port $candidate)) { $port = $candidate; break }
+        }
+        if ($port -eq $originalPort) { throw 'Все порты 3000–3020 заняты. Укажите свободный TSUKIREI_PORT.' }
+        Say "Порт $originalPort занят. Использую свободный порт $port."
+    }
+    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите свободный TSUKIREI_PORT." }
+    $env:PORT = "$port"
+    $env:HOST = '127.0.0.1'
+    $env:npm_config_cache = Join-Path $runtime 'npm-cache'
+    $env:npm_config_update_notifier = 'false'
+
+    $lock = Join-Path $app 'package-lock.json'
+    $deps = Join-Path $app 'node_modules'
+    $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
+    $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+    $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
+    $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
+    if (-not $installed) {
+        Say 'Устанавливаю или обновляю зависимости приложения...'
+        Push-Location -LiteralPath $app
+        try {
+            if (Test-Path -LiteralPath $lock) { & $node $npmCli ci --no-audit --no-fund }
+            else { & $node $npmCli install --no-audit --no-fund }
+            if ($LASTEXITCODE -ne 0) { throw "Установка npm завершилась с ошибкой (код $LASTEXITCODE)." }
+        } finally { Pop-Location }
+        $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+        Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
+    }
+
+    $output = Join-Path $logs "$stamp-out.log"
+    $errors = Join-Path $logs "$stamp-error.log"
+    $args = '"' + $npmCli + '" run ' + $script
+    if ($vite) { $args += " -- --host 127.0.0.1 --port $port --strictPort" }
+    elseif ($next) { $args += " -- --hostname 127.0.0.1 --port $port" }
+    Say "Запускаю npm run $script, порт $port..."
+    Say "Журналы: $output и $errors"
+    $process = Start-Process -FilePath $node -ArgumentList $args -WorkingDirectory $app -RedirectStandardOutput $output -RedirectStandardError $errors -NoNewWindow -PassThru
+    $url = "http://127.0.0.1:$port/"
+    $ready = $false
+    for ($seconds = 0; $seconds -lt 60; $seconds++) {
+        $process.Refresh()
+        if ($process.HasExited) { break }
+        if (Test-Port $port) {
+            try {
+                $response = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
+                if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
+                    $health = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 3
+                    if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') {
+                        $ready = $true
+                        break
+                    }
+                }
+            } catch { }
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $ready) {
+        Say 'Сервер не открылся. Последние строки журналов:'
+        Write-Host (Get-ExitText $errors)
+        Write-Host (Get-ExitText $output)
+        throw 'Приложение не запустилось. Посмотрите ошибки выше.'
+    }
+    Say "Сервер готов: $url"
+    if (-not $noOpen) {
+        try { Start-Process $url | Out-Null }
+        catch { Say "Браузер не открылся автоматически. Откройте вручную: $url" }
+    }
+    Say 'Для остановки нажмите Ctrl+C в этом окне.'
+    while (-not $process.HasExited) { Start-Sleep -Seconds 1; $process.Refresh() }
+    Say "Сервер остановлен (код $($process.ExitCode))."
+    if ($process.ExitCode -ne 0) { Write-Host (Get-ExitText $errors); exit $process.ExitCode }
+} catch {
+    Say "ОШИБКА: $($_.Exception.Message)"
+    try {
+        New-Item -ItemType Directory -Path $logs -Force | Out-Null
+        Add-Content -LiteralPath (Join-Path $logs 'launcher-errors.log') -Value "[$(Get-Date -Format o)] $($_ | Out-String)" -Encoding UTF8
+    } catch { }
+    exit 1
+} finally {
+    if ($process) {
+        try { $process.Refresh(); if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch { }
+        $process.Dispose()
+    }
+    if ($mutex) {
+        try { $mutex.ReleaseMutex() } catch { }
+        $mutex.Dispose()
+    }
+}
+exit 0
+ -or
+            -not [IO.Path]::IsPathRooted([string]$config.store)) {
+            throw 'Неверная конфигурация data/portable-postgres.json. Проверьте резервную копию.'
+        }
+        $store = [string]$config.store
+        if (-not (Test-Path -LiteralPath $store -PathType Container)) {
+            throw "Папка PostgreSQL не найдена: $store. Верните диск с базой; новая база не будет создана автоматически."
+        }
+    } else {
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $digest = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant())))).Replace('-', '').Substring(0, 16)
+        } finally { $sha.Dispose() }
+        $store = $null
+        $candidateParent = $root
+        while ($candidateParent) {
+            if ($candidateParent -cmatch '^[\x20-\x7E]+
+    $tcp = New-Object Net.Sockets.TcpClient
+    try {
+        $async = $tcp.BeginConnect('127.0.0.1', $number, $null, $null)
+        if (-not $async.AsyncWaitHandle.WaitOne(350)) { return $false }
+        $tcp.EndConnect($async)
+        return $true
+    } catch { return $false }
+    finally { $tcp.Close() }
+}
+function Get-ExitText([string]$path) {
+    if (Test-Path -LiteralPath $path) { return (Get-Content -LiteralPath $path -Tail 35 -ErrorAction SilentlyContinue | Out-String) }
+    return ''
+}
+
+if ($help) {
+    Say 'Команды: Tsukirei.bat [--diagnose] [--no-open] [--help]'
+    Say '--diagnose проверяет окружение без установки и запуска приложения.'
+    exit 0
+}
+Say "Папка проекта: $root"
+$app = Find-App
+if ($diagnose) {
+    Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
+    Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
+    $node = Find-Node
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
+    Say "Локальные файлы: $runtime; журналы: $logs"
+    Say 'Диагностика завершена.'
+    exit 0
+}
+if (-not $app) {
+    Say 'Исходники приложения не найдены. Репозиторий пока пустой — это ожидаемо.'
+    Say 'BAT готов. Для запуска сайта нужно добавить исходники и package.json.'
+    Say 'Для проверки запустите Tsukirei.bat --diagnose.'
+    exit 2
+}
+
+$mutex = $null
+$process = $null
+try {
+    New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try { $bytes = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant())) }
+    finally { $sha.Dispose() }
+    $name = 'Local\Tsukirei_' + ([BitConverter]::ToString($bytes).Replace('-', '').Substring(0, 24))
+    $mutex = [System.Threading.Mutex]::new($false, $name)
+    if (-not $mutex.WaitOne(0, $false)) { Say 'Этот экземпляр Tsukirei уже запущен.'; exit 3 }
+
+    $node = Find-Node
+    if (-not $node) { $node = Install-Node }
+    $env:PATH = (Split-Path -Parent $node) + ';' + $env:PATH
+    $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
+    if (-not (Test-Path -LiteralPath $npmCli -PathType Leaf)) {
+        throw "Рядом с Node.js не найден npm CLI: $npmCli"
+    }
+    $packageFile = Join-Path $app 'package.json'
+    $package = Get-Content -LiteralPath $packageFile -Raw -Encoding UTF8 | ConvertFrom-Json
+    $script = @('dev', 'start', 'preview') | Where-Object { $package.scripts -and $package.scripts.PSObject.Properties.Name -contains $_ } | Select-Object -First 1
+    if (-not $script) { throw 'В package.json нет команды dev, start или preview.' }
+    $scriptContent = [string]$package.scripts.$script
+    $vite = $scriptContent -match '(?i)(^|\s|/|\\)vite(\s|$)'
+    $next = $scriptContent -match '(?i)next\s+dev'
+    $defaultPort = if ($vite) { 5173 } else { 3000 }
+    $port = $defaultPort
+    if ($env:TSUKIREI_PORT) {
+        $candidate = 0
+        if (-not [int]::TryParse($env:TSUKIREI_PORT, [ref]$candidate) -or $candidate -lt 1024 -or $candidate -gt 65535) {
+            throw 'TSUKIREI_PORT должен быть числом от 1024 до 65535.'
+        }
+        $port = $candidate
+    }
+    if (-not $env:TSUKIREI_PORT -and (Test-Port $port)) {
+        $originalPort = $port
+        foreach ($candidate in 3001..3020) {
+            if (-not (Test-Port $candidate)) { $port = $candidate; break }
+        }
+        if ($port -eq $originalPort) { throw 'Все порты 3000–3020 заняты. Укажите свободный TSUKIREI_PORT.' }
+        Say "Порт $originalPort занят. Использую свободный порт $port."
+    }
+    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите свободный TSUKIREI_PORT." }
+    $env:PORT = "$port"
+    $env:HOST = '127.0.0.1'
+    $env:npm_config_cache = Join-Path $runtime 'npm-cache'
+    $env:npm_config_update_notifier = 'false'
+
+    $lock = Join-Path $app 'package-lock.json'
+    $deps = Join-Path $app 'node_modules'
+    $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
+    $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+    $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
+    $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
+    if (-not $installed) {
+        Say 'Устанавливаю или обновляю зависимости приложения...'
+        Push-Location -LiteralPath $app
+        try {
+            if (Test-Path -LiteralPath $lock) { & $node $npmCli ci --no-audit --no-fund }
+            else { & $node $npmCli install --no-audit --no-fund }
+            if ($LASTEXITCODE -ne 0) { throw "Установка npm завершилась с ошибкой (код $LASTEXITCODE)." }
+        } finally { Pop-Location }
+        $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
+        Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
+    }
+
+    $output = Join-Path $logs "$stamp-out.log"
+    $errors = Join-Path $logs "$stamp-error.log"
+    $args = '"' + $npmCli + '" run ' + $script
+    if ($vite) { $args += " -- --host 127.0.0.1 --port $port --strictPort" }
+    elseif ($next) { $args += " -- --hostname 127.0.0.1 --port $port" }
+    Say "Запускаю npm run $script, порт $port..."
+    Say "Журналы: $output и $errors"
+    $process = Start-Process -FilePath $node -ArgumentList $args -WorkingDirectory $app -RedirectStandardOutput $output -RedirectStandardError $errors -NoNewWindow -PassThru
+    $url = "http://127.0.0.1:$port/"
+    $ready = $false
+    for ($seconds = 0; $seconds -lt 60; $seconds++) {
+        $process.Refresh()
+        if ($process.HasExited) { break }
+        if (Test-Port $port) {
+            try {
+                $response = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
+                if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
+                    $health = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 3
+                    if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') {
+                        $ready = $true
+                        break
+                    }
+                }
+            } catch { }
+        }
+        Start-Sleep -Seconds 1
+    }
+    if (-not $ready) {
+        Say 'Сервер не открылся. Последние строки журналов:'
+        Write-Host (Get-ExitText $errors)
+        Write-Host (Get-ExitText $output)
+        throw 'Приложение не запустилось. Посмотрите ошибки выше.'
+    }
+    Say "Сервер готов: $url"
+    if (-not $noOpen) {
+        try { Start-Process $url | Out-Null }
+        catch { Say "Браузер не открылся автоматически. Откройте вручную: $url" }
+    }
+    Say 'Для остановки нажмите Ctrl+C в этом окне.'
+    while (-not $process.HasExited) { Start-Sleep -Seconds 1; $process.Refresh() }
+    Say "Сервер остановлен (код $($process.ExitCode))."
+    if ($process.ExitCode -ne 0) { Write-Host (Get-ExitText $errors); exit $process.ExitCode }
+} catch {
+    Say "ОШИБКА: $($_.Exception.Message)"
+    try {
+        New-Item -ItemType Directory -Path $logs -Force | Out-Null
+        Add-Content -LiteralPath (Join-Path $logs 'launcher-errors.log') -Value "[$(Get-Date -Format o)] $($_ | Out-String)" -Encoding UTF8
+    } catch { }
+    exit 1
+} finally {
+    if ($process) {
+        try { $process.Refresh(); if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch { }
+        $process.Dispose()
+    }
+    if ($mutex) {
+        try { $mutex.ReleaseMutex() } catch { }
+        $mutex.Dispose()
+    }
+}
+exit 0
+) {
+                $candidate = Join-Path $candidateParent ('Tsukirei-Postgres-' + $digest)
+                try {
+                    New-Item -ItemType Directory -Path $candidate -Force -ErrorAction Stop | Out-Null
+                    $item = Get-Item -LiteralPath $candidate -Force
+                    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                        throw 'Символьные ссылки или junction не поддерживаются для каталога initdb'
+                    }
+                    $store = $candidate
+                    break
+                } catch {
+                    Say ('Каталог не подошёл: ' + $candidate + ' (' + $_.Exception.Message + ')')
+                }
+            }
+            $up = Split-Path -Path $candidateParent -Parent
+            if (-not $up -or $up -eq $candidateParent) { break }
+            $candidateParent = $up
+        }
+        if (-not $store) {
+            throw 'На этом диске не удалось создать настоящий ASCII-каталог PostgreSQL. Нужна доступная для записи папка без кириллицы в пути.'
+        }
+        $port = $null
+        foreach ($number in 55432..55480) {
+            if (-not (Test-Port $number)) { $port = $number; break }
+        }
+        if (-not $port) { throw 'Все проверенные порты PostgreSQL 55432–55480 заняты.' }
+        $secret = New-Object byte[] 32
+        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($secret) } finally { $rng.Dispose() }
+        $config = [pscustomobject]@{
+            version = 1
+            port = $port
+            password = ([BitConverter]::ToString($secret)).Replace('-', '').ToLowerInvariant()
+            store = $store
+        }
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($managed, ($config | ConvertTo-Json -Compress), $utf8)
+    }
+
+    $env:PG0_HOME = Join-Path $store 'pg0-home'
+    $env:PG0_INSTALLATION_DIR = Join-Path $store 'pg0-installation'
+    $env:TEMP = Join-Path $store 'tmp'
+    $env:TMP = $env:TEMP
+    foreach ($dir in @($env:PG0_HOME, $env:PG0_INSTALLATION_DIR, $env:TEMP)) {
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    $dbDir = Join-Path $store 'postgres-data'
+    $script:PortablePG0 = $exe
+    $script:PortablePG0Home = $env:PG0_HOME
+    $script:PortablePgPort = [int]$config.port
+
+    if (Test-Port $script:PortablePgPort) {
+        # Never connect to an unrelated service merely because the port is occupied.
+        $info = (& $exe info --name tsukirei -o json 2>$null | Out-String)
+        if ($LASTEXITCODE -ne 0 -or $info -notmatch '"running"\s*:\s*true') {
+            throw 'Порт ранее созданной базы занят чужим процессом. Завершите его, не удаляя папку PostgreSQL.'
+        }
+        Say 'PostgreSQL Tsukirei уже работает.'
+    } else {
+        Say ('Запускаю PostgreSQL + pgvector на порту ' + $config.port + '...')
+        $result = (& $exe start --name tsukirei --port ([int]$config.port) --data-dir $dbDir --username tsukirei --password ([string]$config.password) --database tsukirei --config 'listen_addresses=127.0.0.1' --config 'shared_buffers=64MB' --config 'work_mem=8MB' --config 'maintenance_work_mem=128MB' 2>&1 | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw ('Не удалось инициализировать PostgreSQL: ' + $result.Replace([string]$config.password, '[СКРЫТО]'))
+        }
+    }
+    if (-not (Test-Port ([int]$config.port))) { throw 'PostgreSQL запущен, но порт не отвечает.' }
+    $script:PortablePG0Started = $true
+    $url = 'postgresql://tsukirei:' + [string]$config.password + '@127.0.0.1:' + [string]$config.port + '/tsukirei'
+    $env:TSUKIREI_DATABASE_URL = $url
+    if (-not (Test-Path -LiteralPath $settings)) {
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($settings, (@{ url = $url } | ConvertTo-Json -Compress), $utf8)
+    }
+    Say ('PostgreSQL подключён. Данные хранятся на этом же диске: ' + $store)
 }
 function Test-Port([int]$number) {
     $tcp = New-Object Net.Sockets.TcpClient
