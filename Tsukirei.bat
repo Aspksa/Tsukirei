@@ -88,7 +88,7 @@ function Install-Node {
         $line = Get-Content -LiteralPath $sums | Where-Object { $_ -match ('\s+' + [regex]::Escape($zipName) + '$') } | Select-Object -First 1
         if (-not $line) { throw 'Не найдена контрольная сумма SHA-256 архива Node.js.' }
         $expected = ($line -split '\s+')[0].ToLowerInvariant()
-        $actual = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+        $actual = (Get-Sha256 $zip).ToLowerInvariant()
         if ($expected -ne $actual) { throw 'Проверка SHA-256 не пройдена. Архив не используется.' }
         Expand-Archive -LiteralPath $zip -DestinationPath $temporary -Force
         $expanded = Join-Path $temporary $name
@@ -98,6 +98,12 @@ function Install-Node {
     } finally {
         if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force -ErrorAction SilentlyContinue }
     }
+}
+function Get-Sha256([string]$path) {
+    $hash = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($path)
+    try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-', '') }
+    finally { $stream.Dispose(); $hash.Dispose() }
 }
 function Test-Port([int]$number) {
     $tcp = New-Object Net.Sockets.TcpClient
@@ -125,7 +131,7 @@ if ($diagnose) {
     Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
     Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
     $node = Find-Node
-    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при добавлении приложения установится автоматически' })"
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
     Say 'Диагностика завершена.'
     exit 0
@@ -171,7 +177,15 @@ try {
         }
         $port = $candidate
     }
-    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите TSUKIREI_PORT." }
+    if (-not $env:TSUKIREI_PORT -and (Test-Port $port)) {
+        $originalPort = $port
+        foreach ($candidate in 3001..3020) {
+            if (-not (Test-Port $candidate)) { $port = $candidate; break }
+        }
+        if ($port -eq $originalPort) { throw 'Все порты 3000–3020 заняты. Укажите свободный TSUKIREI_PORT.' }
+        Say "Порт $originalPort занят. Использую свободный порт $port."
+    }
+    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите свободный TSUKIREI_PORT." }
     $env:PORT = "$port"
     $env:HOST = '127.0.0.1'
     $env:npm_config_cache = Join-Path $runtime 'npm-cache'
@@ -180,7 +194,7 @@ try {
     $lock = Join-Path $app 'package-lock.json'
     $deps = Join-Path $app 'node_modules'
     $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
-    $depHash = (Get-FileHash -LiteralPath $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }) -Algorithm SHA256).Hash
+    $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
     $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
     $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
     if (-not $installed) {
@@ -191,7 +205,7 @@ try {
             else { & $node $npmCli install --no-audit --no-fund }
             if ($LASTEXITCODE -ne 0) { throw "Установка npm завершилась с ошибкой (код $LASTEXITCODE)." }
         } finally { Pop-Location }
-        $depHash = (Get-FileHash -LiteralPath $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }) -Algorithm SHA256).Hash
+        $depHash = (Get-Sha256 $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }))
         Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
     }
 
@@ -212,8 +226,11 @@ try {
             try {
                 $response = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
                 if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
-                    $ready = $true
-                    break
+                    $health = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 3
+                    if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') {
+                        $ready = $true
+                        break
+                    }
                 }
             } catch { }
         }
