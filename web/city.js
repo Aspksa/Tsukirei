@@ -346,7 +346,30 @@
     const observer = new ResizeObserver(() => { if (active) resize(); });
     observer.observe(stage);
     root.document.addEventListener('visibilitychange', () => { if (!root.document.hidden) schedule(); });
-    return { update, activate };
+    function search(query, limit = 12) {
+      const q = String(query || '').trim().toLocaleLowerCase('ru').slice(0, 110);
+      if (q.length < 2) return [];
+      const matches = [];
+      for (const building of scene.buildings) {
+        const title = building.title.toLocaleLowerCase('ru');
+        const preview = String(building.body || '').toLocaleLowerCase('ru');
+        if (title.includes(q) || preview.includes(q)) {
+          matches.push({ id: building.id, title: building.title,
+            districtName: building.districtName, kind: building.kind });
+          if (matches.length >= limit) break;
+        }
+      }
+      return matches;
+    }
+    function focus(id) {
+      const building = scene.buildings.find(item => item.id === id);
+      if (!building) return false;
+      selected = building.id;
+      const point = project(building.x, building.y);
+      panX += width / 2 - point.x; panY += height / 2 - point.y;
+      showSelected(); schedule(); return true;
+    }
+    return { update, activate, search, focus };
   }
   root.TsukireiCity = Object.freeze({ startCity });
 })(globalThis);

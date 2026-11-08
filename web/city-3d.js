@@ -373,7 +373,29 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  canvas.addEventListener('webglcontextrestored',()=>root.location.reload());
  const observer=new ResizeObserver(()=>{if(active)resize();});
  observer.observe(canvas.parentElement);
- return{update,activate,is3D:true};
+ function search(query,limit=12){
+  const q=String(query||'').trim().toLocaleLowerCase('ru').slice(0,110);
+  if(q.length<2)return [];
+  const matches=[];
+  for(const building of scene.buildings){
+   const title=building.title.toLocaleLowerCase('ru');
+   const preview=String(building.body||'').toLocaleLowerCase('ru');
+   if(title.includes(q)||preview.includes(q)){
+    matches.push({id:building.id,title:building.title,districtName:building.districtName,kind:building.kind});
+    if(matches.length>=limit)break;
+   }
+  }
+  return matches;
+ }
+ function focus(id){
+  const record=scene.buildings.find(b=>b.id===id);
+  if(!record)return false;
+  selected=record.id;
+  target=[record.x,Math.max(10,record.height*.35),record.y];
+  distance=Math.max(140,Math.min(380,distance));
+  renderDetail();schedule();return true;
+ }
+ return{update,activate,search,focus,is3D:true};
 }
 root.TsukireiCity3D=Object.freeze({startCity});
 })(globalThis);
