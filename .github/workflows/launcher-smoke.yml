@@ -25,3 +25,47 @@ jobs:
           Copy-Item -LiteralPath '.\Tsukirei.bat' -Destination (Join-Path $dir 'Tsukirei.bat')
           & (Join-Path $dir 'Tsukirei.bat') --diagnose
           if ($LASTEXITCODE -ne 0) { throw "Special path test failed: $LASTEXITCODE" }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Start real application from special-character folder
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'Цукирэй & тест ! ^ ( ) %'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          foreach ($name in @('Tsukirei.bat', 'package.json', 'package-lock.json')) {
+            Copy-Item -LiteralPath (Join-Path $pwd $name) -Destination $dir -Force
+          }
+          foreach ($name in @('server', 'web')) {
+            Copy-Item -LiteralPath (Join-Path $pwd $name) -Destination $dir -Recurse -Force
+          }
+          $env:TSUKIREI_TEST_LAUNCHER = Join-Path $dir 'Tsukirei.bat'
+          $env:TSUKIREI_PORT = '39555'
+          $out = Join-Path $env:RUNNER_TEMP 'tsukirei-launch-out.txt'
+          $err = Join-Path $env:RUNNER_TEMP 'tsukirei-launch-err.txt'
+          $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "& $env:TSUKIREI_TEST_LAUNCHER --no-open"' -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              Start-Sleep -Milliseconds 1000
+              $proc.Refresh()
+              if ($proc.HasExited) { break }
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/health' -TimeoutSec 2
+                if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') { $ready = $true; break }
+              } catch { }
+            }
+            if (-not $ready) {
+              Write-Host 'Launcher stdout:'
+              if (Test-Path $out) { Get-Content $out -Tail 60 }
+              Write-Host 'Launcher stderr:'
+              if (Test-Path $err) { Get-Content $err -Tail 60 }
+              throw 'BAT did not start the real Tsukirei server'
+            }
+            $page = Invoke-WebRequest -Uri 'http://127.0.0.1:39555/' -UseBasicParsing -TimeoutSec 4
+            if ($page.StatusCode -ne 200 -or $page.Content -notmatch 'Tsukirei') { throw 'Homepage not served' }
+            $script = Invoke-WebRequest -Uri 'http://127.0.0.1:39555/main.js' -UseBasicParsing -TimeoutSec 4
+            if ($script.StatusCode -ne 200) { throw 'Frontend script not served' }
+          } finally {
+            try { & taskkill.exe /PID $proc.Id /T /F | Out-Null } catch { }
+          }
