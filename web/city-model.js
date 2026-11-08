@@ -55,6 +55,16 @@
       items.push({ id: 'chat:' + message.id, kind: 'chat', sourceId: message.id, title,
         body: combined, date: message.createdAt || '', words: tokens(combined) });
     }
+    const knowledge = Array.isArray(state?.knowledge) ? state.knowledge : [];
+    for (const entry of knowledge) {
+      if (!entry || !entry.id || typeof entry.content !== 'string') continue;
+      const body = entry.content.trim();
+      if (!body) continue;
+      const title = body.length > 74 ? body.slice(0, 71) + '…' : body;
+      const source = typeof entry.source === 'string' ? entry.source : 'knowledge';
+      items.push({ id: 'knowledge:' + entry.id, kind: 'knowledge', sourceId: entry.id,
+        title, body, source, date: entry.createdAt || '', words: tokens(body) });
+    }
     return items;
   }
   function classify(item) {
@@ -72,7 +82,7 @@
     }
     if (best) return { key: best.id, name: best.name };
     const first = tokens(primary)[0] || tokens(all)[0];
-    return first ? { key: 'word:' + first, name: first.charAt(0).toUpperCase() + first.slice(1) }
+    return first ? { key: 'letter:' + first[0], name: 'Другие темы · ' + first[0].toUpperCase() }
       : { key: 'other', name: 'Разное' };
   }
   function cityFromState(state) {
@@ -125,7 +135,8 @@
     return { districts, buildings, roads,
       stats: { districts: districts.length, buildings: buildings.length, connections: roads.length,
         notes: buildings.filter(b => b.kind === 'note').length,
-        dialogues: buildings.filter(b => b.kind === 'chat').length } };
+        dialogues: buildings.filter(b => b.kind === 'chat').length,
+        knowledge: buildings.filter(b => b.kind === 'knowledge').length } };
   }
   root.TsukireiCityModel = Object.freeze({ cityFromState, tokens });
 })(globalThis);
