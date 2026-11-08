@@ -42,7 +42,10 @@ function Check-Node([string]$exe) {
     if (-not $exe -or -not (Test-Path -LiteralPath $exe -PathType Leaf)) { return $false }
     try {
         $version = (& $exe '--version' 2>$null).Trim()
-        return ($version -match '^v(\d+)\.' -and [int]$Matches[1] -ge 20)
+        if ($version -notmatch '^v(\d+)\.(\d+)\.') { return $false }
+        $major = [int]$Matches[1]
+        $minor = [int]$Matches[2]
+        return ($major -gt 22 -or ($major -eq 22 -and $minor -ge 18))
     } catch { return $false }
 }
 function Find-Node {
@@ -58,7 +61,7 @@ function Find-Node {
     return $null
 }
 function Install-Node {
-    Say 'Node.js 20+ не найден. Устанавливаю переносимый Node.js LTS без прав администратора...'
+    Say 'Node.js 22.18+ не найден. Устанавливаю переносимый Node.js LTS без прав администратора...'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $arch = if ([Environment]::Is64BitOperatingSystem) {
         if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64' -or $env:PROCESSOR_ARCHITEW6432 -eq 'ARM64') { 'arm64' } else { 'x64' }
@@ -122,7 +125,7 @@ if ($diagnose) {
     Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
     Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
     $node = Find-Node
-    Say "Node.js 20+: $(if ($node) { $node } else { 'не найден; при добавлении приложения установится автоматически' })"
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при добавлении приложения установится автоматически' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
     Say 'Диагностика завершена.'
     exit 0
@@ -178,7 +181,8 @@ try {
     $deps = Join-Path $app 'node_modules'
     $installMarker = Join-Path $runtime ('deps-' + [IO.Path]::GetFileName($app) + '.sha256')
     $depHash = (Get-FileHash -LiteralPath $(if (Test-Path -LiteralPath $lock) { $lock } else { $packageFile }) -Algorithm SHA256).Hash
-    $installed = (Test-Path -LiteralPath $deps -PathType Container) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
+    $hasPackages = ($package.dependencies -and $package.dependencies.PSObject.Properties.Count -gt 0) -or ($package.devDependencies -and $package.devDependencies.PSObject.Properties.Count -gt 0)
+    $installed = ((-not $hasPackages) -or (Test-Path -LiteralPath $deps -PathType Container)) -and (Test-Path -LiteralPath $installMarker -PathType Leaf) -and ((Get-Content -LiteralPath $installMarker -Raw).Trim() -eq $depHash)
     if (-not $installed) {
         Say 'Устанавливаю или обновляю зависимости приложения...'
         Push-Location -LiteralPath $app

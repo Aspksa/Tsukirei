@@ -254,8 +254,7 @@ function showFailedStart(message) {
   el('connection-detail').textContent = message + ' Проверьте окно BAT и журналы в папке logs.';
   notify(message, true);
 }
-run(async () => {
-  const data = await api('/api/state');
+api('/api/state').then(data => {
   Object.assign(viewState, data);
   render();
   const page = window.location.hash.slice(1);

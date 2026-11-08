@@ -1,0 +1,25 @@
+name: Tsukirei runtime and API
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check syntax
+        run: npm run check
+      - name: Test local API and static pages
+        run: npm test
