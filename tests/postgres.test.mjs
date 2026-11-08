@@ -105,7 +105,7 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   assert.ok(tile.data.buildings.some(b=>b.sourceId===legacy.notes[0].id));
   const match=await api(first.base,'/api/city/world/search?q='+encodeURIComponent('Tsukirei'));
   assert.equal(match.status,200);
-  assert.ok(match.data.items.some(b=>b.sourceId===undefined&&b.kind==='knowledge'));
+  assert.ok(match.data.items.some(b=>b.id==='knowledge:'+fact.data.knowledge.id));
   const created=await api(first.base,'/api/notes','POST',{title:'Знание в новом районе'});
   assert.equal(created.status,201);
   await readyWorld(3);
