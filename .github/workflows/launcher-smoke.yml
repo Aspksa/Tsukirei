@@ -46,7 +46,7 @@ jobs:
           $proc = Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile -ExecutionPolicy Bypass -Command "& $env:TSUKIREI_TEST_LAUNCHER --no-open"' -RedirectStandardOutput $out -RedirectStandardError $err -PassThru
           try {
             $ready = $false
-            for ($i = 0; $i -lt 240; $i++) {
+            for ($i = 0; $i -lt 45; $i++) {
               Start-Sleep -Milliseconds 1000
               $proc.Refresh()
               if ($proc.HasExited) { break }
