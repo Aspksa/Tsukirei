@@ -69,7 +69,7 @@ try {
   });
   const evaluate=async expression=>{
     const result=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});
-    if(result.exceptionDetails)throw Error(result.exceptionDetails.text);
+    if(result.exceptionDetails){ const d=result.exceptionDetails; throw Error([d.text,d.exception?.description,JSON.stringify(d.stackTrace?.callFrames || [])].filter(Boolean).join('\n')); }
     return result.result?.value;
   };
   await send('Runtime.enable');await send('Page.enable');
