@@ -8,6 +8,7 @@
     if (!ctx) return null;
     const stage = canvas.parentElement;
     let scene = model.cityFromState({ notes: [], messages: [] });
+    let spatial = root.TsukireiSpatial?.build(scene.buildings) || null;
     let active = false, raf = 0, width = 1, height = 1, dpr = 1;
     let zoom = 1, panX = 0, panY = 0, fitNeeded = true;
     let hover = null, selected = null, hits = [];
@@ -175,8 +176,21 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       drawBackground(); hits = [];
       drawConnections();
-      for (const d of scene.districts) drawDistrict(d);
-      for (const b of [...scene.buildings].sort((a, b) => a.x + a.y - b.x - b.y)) drawBuilding(b, time);
+      // The fallback canvas is also bounded; it never paints the entire world.
+      const inverseX = (-panX / Math.max(.01, zoom * .74));
+      const inverseY = (-panY / Math.max(.01, zoom * .37));
+      const centerX = (inverseX + inverseY) / 2;
+      const centerY = (inverseY - inverseX) / 2;
+      const radius = Math.max(220, Math.max(width, height) / Math.max(.1, zoom * .6));
+      const visible = spatial ? root.TsukireiSpatial.select(spatial,
+        { x: centerX, y: centerY, distance: radius / 1.4 }, 3500).items
+        : scene.buildings.slice(0, 3500);
+      const districts = new Set(visible.map(b => b.district));
+      for (const d of scene.districts) if(districts.has(d.key)) drawDistrict(d);
+      for (const b of visible.sort((a, b) => a.x + a.y - b.x - b.y)) drawBuilding(b, time);
+      const label = root.document.getElementById('city-visible-status');
+      if(label) label.textContent = '2D: ' + visible.length.toLocaleString('ru-RU') +
+        ' / ' + scene.buildings.length.toLocaleString('ru-RU') + ' (лимит 3500)';
       if (scene.stats.buildings === 0) {
         ctx.textAlign = 'center';
         ctx.font = '400 16px system-ui, sans-serif';
@@ -280,6 +294,7 @@
     function update(state) {
       const countBefore = scene.stats.buildings;
       scene = model.cityFromState(state);
+      spatial = root.TsukireiSpatial?.build(scene.buildings) || null;
       if (!scene.buildings.some(b => b.id === selected)) selected = null;
       const target = root.document.getElementById('city-stats');
       if (target) target.textContent = scene.stats.districts + ' районов · ' +
