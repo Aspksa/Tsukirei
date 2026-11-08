@@ -199,6 +199,16 @@ function Ensure-PortablePostgres {
         New-Item -ItemType Directory -Path $folder -Force | Out-Null
     }
     $db = Join-Path $store 'database'
+    if (-not (Test-Path -LiteralPath (Join-Path $db 'PG_VERSION'))) {
+        # initdb on Windows needs WRITE_DAC/Full Control for the current SID.
+        # Grant it only to the current account, never Everyone and never system-wide.
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $access = '*' + $sid + ':(OI)(CI)F'
+        & icacls.exe $store '/grant:r' $access '/T' '/C' | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Не удалось установить права текущего пользователя на каталог PostgreSQL. Проверьте разрешения NTFS.'
+        }
+    }
     $script:PortablePG0 = $exe
     if (Test-Port ([int]$config.port)) {
         $info = (& $exe info --name tsukirei -o json 2>$null | Out-String)
