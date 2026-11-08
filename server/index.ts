@@ -3,8 +3,6 @@ import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from '
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { connectPostgres, emptyState, validateState, type Note, type Task, type State } from './postgres.ts';
-import { CityWorldService } from './city-world-service.ts';
-import type { WorldKind } from './city-world.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -17,13 +15,6 @@ const endpoint = 'https://foundation-models.api.cloud.ru/v1';
 const port = Number(process.env.PORT ?? 3000);
 let cloudBusy = false;
 const database = await connectPostgres(dataDir);
-const cityWorld = new CityWorldService(async (kind:WorldKind,offset:number,limit:number) => {
-  if(database)return database.pageCity(kind,offset,limit);
-  const state=readLegacyState();
-  const values=kind==='knowledge'?[]:state[kind];
-  return {total:values.length,items:values.slice(offset,offset+limit),revision:null};
-});
-
 class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
@@ -38,12 +29,11 @@ async function readState(): Promise<State> {
 // Serialise legacy writes; PostgreSQL uses SELECT ... FOR UPDATE inside a transaction.
 let legacyQueue: Promise<unknown> = Promise.resolve();
 async function mutateState<T>(change: (state: State) => T): Promise<T> {
-  if (database) { const result=await database.mutate(change); cityWorld.invalidate(); return result; }
+  if (database) return database.mutate(change);
   const pending = legacyQueue.then(() => {
     const state = readLegacyState();
     const result = change(state);
     saveAtomic(statePath, state);
-    cityWorld.invalidate();
     return result;
   });
   legacyQueue = pending.catch(() => {});
@@ -158,98 +148,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = req.headers.origin;
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.5.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
-  }
-  if (method === 'GET' && pathname === '/api/city/world/status') {
-    json(res,200,cityWorld.status());return;
-  }
-  if (method === 'GET' && pathname === '/api/city/world/tiles') {
-    const params=new URL(req.url??'/','http://127.0.0.1').searchParams;
-    const parse=(key:string,defaultValue:number,min:number,max:number) => {
-      const raw=params.get(key);
-      const value=raw===null?defaultValue:Number(raw);
-      if(!Number.isFinite(value)||value<min||value>max)
-        throw new HttpError(400,'Неверный параметр '+key);
-      return value;
-    };
-    const x=parse('x',0,-1e8,1e8),y=parse('y',0,-1e8,1e8);
-    const radius=parse('radius',900,200,100000);
-    const limit=parse('limit',3500,1,6500);
-    if(!Number.isInteger(limit))throw new HttpError(400,'limit должен быть целым');
-    const data=cityWorld.tiles(x,y,radius,limit);
-    if(!data){json(res,202,cityWorld.status());return;}
-    json(res,200,{ready:true,...data});return;
-  }
-  if (method === 'GET' && pathname === '/api/city/world/search') {
-    const params=new URL(req.url??'/','http://127.0.0.1').searchParams;
-    const q=params.get('q')??'';
-    if(q.length<2||q.length>100)throw new HttpError(400,'Введите от 2 до 100 символов');
-    const data=cityWorld.search(q,14);
-    if(!data){json(res,202,cityWorld.status());return;}
-    json(res,200,{ready:true,items:data.map(b=>({
-      id:b.id,title:b.title,districtName:b.districtName,kind:b.kind,x:b.x,y:b.y
-    }))});return;
-  }
-  if (method === 'GET' && pathname === '/api/city/entry') {
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const kind = url.searchParams.get('kind');
-    const id = url.searchParams.get('id');
-    if (kind !== 'notes' && kind !== 'messages' && kind !== 'knowledge')
-      throw new HttpError(400, 'kind: notes, messages или knowledge');
-    if (!id || id.length > 100 || (kind === 'knowledge' ? !validId(id) : !/^[\p{L}\p{N}_:-]{1,100}$/u.test(id)))
-      throw new HttpError(400, 'Неверный идентификатор записи');
-    const entry = database ? await database.cityEntry(kind, id)
-      : kind === 'knowledge' ? null : readLegacyState()[kind].find(item => item.id === id) ?? null;
-    if (!entry) throw new HttpError(404, 'Исходная запись не найдена');
-    json(res, 200, { kind, entry }); return;
-  }
-  if (method === 'GET' && pathname === '/api/city/archive') {
-    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    const kind = url.searchParams.get('kind');
-    if (kind !== 'notes' && kind !== 'messages' && kind !== 'knowledge')
-      throw new HttpError(400, 'kind: notes, messages или knowledge');
-    const offsetRaw = url.searchParams.get('offset') ?? '0';
-    const limitRaw = url.searchParams.get('limit') ?? '200';
-    if (!/^\d{1,9}$/.test(offsetRaw) || !/^\d{1,3}$/.test(limitRaw))
-      throw new HttpError(400, 'offset и limit должны быть целыми числами');
-    const offset = Number(offsetRaw), limit = Number(limitRaw);
-    if (limit < 1 || limit > 200) throw new HttpError(400, 'limit должен быть от 1 до 200');
-    let page: { total: number; items: unknown[]; revision: string | null };
-    if (database) page = await database.pageCity(kind, offset, limit);
-    else {
-      const state = readLegacyState();
-      const rows = kind === 'knowledge' ? [] : state[kind];
-      page = { total: rows.length, items: rows.slice(offset, offset + limit), revision: null };
-    }
-    const compact = url.searchParams.get('compact') === '1';
-    // Transfers only titles/previews, never full bodies for the city overview.
-    // The original text is fetched separately on selection. No Cloud.ru calls.
-    const items = compact ? page.items.map(value => {
-      const record = value as Record<string, unknown>;
-      const str = (v: unknown) => typeof v === 'string' ? v : '';
-      const length = kind === 'notes'
-        ? str(record.title).length + str(record.body).length
-        : kind === 'messages' ? str(record.content).length : str(record.content).length;
-      if (kind === 'notes') return {
-        id: record.id, title: str(record.title).slice(0, 130),
-        body: str(record.body).slice(0, 650), createdAt: record.createdAt, fullLength: length
-      };
-      if (kind === 'messages') return {
-        id: record.id, role: record.role, content: str(record.content).slice(0, 650),
-        createdAt: record.createdAt, fullLength: length
-      };
-      return {
-        id: record.id, source: str(record.source).slice(0, 100),
-        content: str(record.content).slice(0, 650), createdAt: record.createdAt,
-        fullLength: length
-      };
-    }) : page.items;
-    json(res, 200, {
-      kind, offset, limit, total: page.total,
-      hasMore: offset + page.items.length < page.total,
-      items, revision: page.revision
-    });
-    return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.6.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
   if (method === 'GET' && pathname === '/api/state') {
     const state = await readState();
@@ -341,7 +240,6 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
     const model = embedding ? requiredText(input.embeddingModel, 'Модель эмбеддингов', 150) : undefined;
     const knowledge = await database.addKnowledge(content, source, metadata as Json, embedding, model);
-    cityWorld.invalidate();
     json(res, 201, { knowledge }); return;
   }
   if (method === 'POST' && pathname === '/api/knowledge/search') {
@@ -366,18 +264,6 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
   if (method === 'GET' && pathname === '/styles.css') {
     staticFile(res, join(root, 'web', 'styles.css'), 'text/css; charset=utf-8'); return;
-  }
-  if (method === 'GET' && pathname === '/city-model.js') {
-    staticFile(res, join(root, 'web', 'city-model.js'), 'text/javascript; charset=utf-8'); return;
-  }
-  if (method === 'GET' && pathname === '/city-spatial.js') {
-    staticFile(res, join(root, 'web', 'city-spatial.js'), 'text/javascript; charset=utf-8'); return;
-  }
-  if (method === 'GET' && pathname === '/city-3d.js') {
-    staticFile(res, join(root, 'web', 'city-3d.js'), 'text/javascript; charset=utf-8'); return;
-  }
-  if (method === 'GET' && pathname === '/city.js') {
-    staticFile(res, join(root, 'web', 'city.js'), 'text/javascript; charset=utf-8'); return;
   }
   if (method === 'GET' && pathname === '/main.js') {
     staticFile(res, join(root, 'web', 'main.js'), 'text/javascript; charset=utf-8'); return;

@@ -105,53 +105,6 @@ export async function connectPostgres(dataDir: string) {
           return result;
         });
       },
-      // Bounded JSONB slices, not full history transfer. Read-only, no migration.
-      async cityEntry(kind: 'notes' | 'messages' | 'knowledge', id: string): Promise<Record<string, unknown> | null> {
-        if (kind === 'knowledge') {
-          const rows = await sql`SELECT id, content, source, metadata, created_at
-            FROM tsukirei_knowledge WHERE id = ${id}::uuid LIMIT 1`;
-          if (!rows.length) return null;
-          const item = rows[0];
-          return {
-            id: String(item.id), content: item.content, source: item.source,
-            metadata: item.metadata ?? {},
-            createdAt: item.created_at instanceof Date ? item.created_at.toISOString() : String(item.created_at)
-          };
-        }
-        const rows = await sql`SELECT element AS item
-          FROM tsukirei_state, jsonb_array_elements(value -> ${kind}) AS element
-          WHERE element ->> 'id' = ${id} LIMIT 1`;
-        return rows.length ? rows[0].item as Record<string, unknown> : null;
-      },
-      async pageCity(kind: 'notes' | 'messages' | 'knowledge', offset: number, limit: number) {
-        if (kind === 'knowledge') {
-          const totals = await sql`SELECT count(*)::int AS total FROM tsukirei_knowledge`;
-          const records = await sql`SELECT id, content, source, metadata, created_at
-            FROM tsukirei_knowledge ORDER BY created_at ASC, id ASC
-            LIMIT ${limit} OFFSET ${offset}`;
-          return {
-            total: Number(totals[0].total),
-            items: records.map(row => ({
-              id: String(row.id), content: row.content, source: row.source,
-              metadata: row.metadata ?? {},
-              createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at)
-            })),
-            revision: null
-          };
-        }
-        const rows = await sql`
-          SELECT
-            jsonb_array_length(value -> ${kind})::int AS total,
-            COALESCE(
-              (SELECT jsonb_agg(value -> ${kind} -> n ORDER BY n)
-               FROM generate_series(${offset}, LEAST(${offset + limit}, jsonb_array_length(value -> ${kind})) - 1) AS n),
-              '[]'::jsonb
-            ) AS items,
-            updated_at::text AS revision
-          FROM tsukirei_state WHERE id = 1`;
-        if (!rows.length) throw new Error('Архив PostgreSQL отсутствует');
-        return { total: Number(rows[0].total), items: rows[0].items, revision: rows[0].revision };
-      },
       async addKnowledge(content: string, source: string, metadata: Record<string, unknown>, embedding?: number[], model?: string): Promise<Knowledge> {
         const id = randomUUID();
         const vector = embedding ? '[' + embedding.join(',') + ']' : null;

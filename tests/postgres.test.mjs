@@ -61,57 +61,9 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   const search = await api(first.base, '/api/knowledge/search', 'POST', { query: 'Tsukirei' });
   assert.equal(search.status, 200);
   assert.ok(search.data.items.some(item => item.id === fact.data.knowledge.id));
-  const pagedNotes = await api(first.base, '/api/city/archive?kind=notes&offset=0&limit=1');
-  assert.equal(pagedNotes.status, 200, JSON.stringify(pagedNotes.data));
-  assert.equal(pagedNotes.data.total, 1);
-  assert.equal(pagedNotes.data.items[0].id, legacy.notes[0].id);
-  assert.equal(pagedNotes.data.hasMore, false);
-  const pagedMessages = await api(first.base, '/api/city/archive?kind=messages&offset=0&limit=20');
-  assert.equal(pagedMessages.status, 200, JSON.stringify(pagedMessages.data));
-  assert.equal(pagedMessages.data.total, 0);
-  assert.deepEqual(pagedMessages.data.items, []);
-  const pagedKnowledge = await api(first.base, '/api/city/archive?kind=knowledge&offset=0&limit=20');
-  assert.equal(pagedKnowledge.status, 200, JSON.stringify(pagedKnowledge.data));
-  assert.equal(pagedKnowledge.data.total >= 1, true);
-  assert.ok(pagedKnowledge.data.items.some(item => item.id === fact.data.knowledge.id));
-  const originalNote = await api(first.base, '/api/city/entry?kind=notes&id=' + legacy.notes[0].id);
-  assert.equal(originalNote.status, 200, JSON.stringify(originalNote.data));
-  assert.equal(originalNote.data.entry.body, 'данные не теряются');
-  const originalKnowledge = await api(first.base, '/api/city/entry?kind=knowledge&id=' + fact.data.knowledge.id);
-  assert.equal(originalKnowledge.status, 200, JSON.stringify(originalKnowledge.data));
-  assert.equal(originalKnowledge.data.entry.content, 'Tsukirei сохраняет знания о памяти');
-  const smallPreview = await api(first.base, '/api/city/archive?kind=notes&offset=0&limit=1&compact=1');
-  assert.equal(smallPreview.status, 200);
-  assert.equal(smallPreview.data.items[0].fullLength, legacy.notes[0].title.length + legacy.notes[0].body.length);
-    const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
+  const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
   assert.equal(vector.status, 200);
   assert.equal(vector.data.items[0].id, fact.data.knowledge.id);
-  async function readyWorld(total) {
-    for (let retry=0;retry<100;retry++) {
-      const state=await api(first.base,'/api/city/world/status');
-      assert.equal(state.status,200);
-      if(state.data.state==='error')throw new Error(state.data.error);
-      if(state.data.ready && state.data.index.total===total)return state.data;
-      await new Promise(resolve=>setTimeout(resolve,80));
-    }
-    throw new Error('Индекс города PostgreSQL не обновился');
-  }
-  const indexed = await readyWorld(2);
-  assert.equal(indexed.index.total,2);
-  const district=indexed.index.districts[0];
-  const tile=await api(first.base,
-    '/api/city/world/tiles?x='+district.x+'&y='+district.y+'&radius=800&limit=50');
-  assert.equal(tile.status,200,JSON.stringify(tile.data));
-  assert.ok(tile.data.buildings.some(b=>b.sourceId===legacy.notes[0].id));
-  const match=await api(first.base,'/api/city/world/search?q='+encodeURIComponent('Tsukirei'));
-  assert.equal(match.status,200);
-  assert.ok(match.data.items.some(b=>b.id==='knowledge:'+fact.data.knowledge.id));
-  const created=await api(first.base,'/api/notes','POST',{title:'Знание в новом районе'});
-  assert.equal(created.status,201);
-  await readyWorld(3);
-  const deleted=await api(first.base,'/api/notes/'+created.data.note.id,'DELETE');
-  assert.equal(deleted.status,200);
-  await readyWorld(2);
   const bad = await api(first.base, '/api/knowledge', 'POST', { content: 'invalid', embedding: [Infinity, NaN] });
   assert.equal(bad.status, 400);
   first.child.kill();

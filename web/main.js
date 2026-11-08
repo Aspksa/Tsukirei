@@ -1,22 +1,10 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', city: 'Город памяти', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
+const pages = { home: 'Обзор', memory: 'Память', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
 let toastTimer;
-let city = null;
-let cityArchive = null;
-let cityLoadGeneration = 0;
-let cityLoading = false;
-let cityLoaded = false;
-let citySearchDelay;
-let indexedWorld=null;
-let indexedTilesSerial=0;
-let indexedCameraTimer=null;
-let indexedFocus=null;
-let searchSerial=0;
-
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -73,16 +61,6 @@ function go(page) {
   });
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
-  city?.activate(page === 'city');
-  if (page !== 'city' && cityLoading) {
-    // Stop the incremental import when the city is no longer visible.
-    cityLoadGeneration++;
-    cityLoading = false;
-    cityArchive = null;
-    indexedWorld = null;
-    indexedTilesSerial++;
-  }
-  if (page === 'city' && !cityLoaded && !cityLoading) loadCityArchive();
   window.location.hash = page;
 }
 function renderStatus() {
@@ -121,13 +99,12 @@ function renderNotes() {
   if (!viewState.notes.length) { list.append(escapeNotNeeded('div', 'empty-state', 'Заметок пока нет. Создайте первую запись.')); return; }
   viewState.notes.forEach(note => {
     const article = escapeNotNeeded('article', 'entry-card');
-    article.dataset.noteId = note.id;
     const top = escapeNotNeeded('div', 'entry-card-top');
     top.append(escapeNotNeeded('h3', '', note.title));
     top.append(removeButton(() => run(async () => {
       await api('/api/notes/' + encodeURIComponent(note.id), { method: 'DELETE' });
       viewState.notes = viewState.notes.filter(item => item.id !== note.id);
-      render(); staleCity(); notify('Запись удалена');
+      render();  notify('Запись удалена');
     })));
     article.append(top);
     if (note.body) article.append(escapeNotNeeded('p', 'note-text', note.body));
@@ -178,224 +155,11 @@ function renderChat() {
   });
   list.scrollTop = list.scrollHeight;
 }
-function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); if (!cityArchive) city?.update(viewState); }
-
-
-function renderCitySearch() {
-  const results = el('city-search-results');
-  const query = el('city-search-input').value.trim();
-  const serial = ++searchSerial;
-  results.replaceChildren();
-  if (query.length < 2) {
-    if (query) results.append(escapeNotNeeded('p', 'city-search-hint', 'Введите минимум 2 символа.'));
-    return;
-  }
-  function display(matches) {
-    if (serial !== searchSerial) return;
-    results.replaceChildren();
-    if (!matches.length) {
-      results.append(escapeNotNeeded('p', 'city-search-hint', cityLoading ?
-        'Записи ещё индексируются…' : 'Совпадений не найдено.'));
-      return;
-    }
-    for (const entry of matches) {
-      const button = escapeNotNeeded('button', 'city-search-result');
-      button.type = 'button';
-      button.setAttribute('role', 'listitem');
-      button.append(escapeNotNeeded('span', '', entry.title),
-        escapeNotNeeded('small', '', entry.districtName));
-      button.addEventListener('click', () => {
-        if (indexedWorld && city?.moveTo) {
-          indexedFocus = entry.id;
-          city.moveTo(entry.x, entry.y);
-          loadIndexedTiles(cityLoadGeneration);
-        } else city?.focus?.(entry.id);
-        el('city-canvas').focus();
-      });
-      results.append(button);
-    }
-  }
-  if (indexedWorld) {
-    api('/api/city/world/search?q=' + encodeURIComponent(query))
-      .then(result => display(result.items || []))
-      .catch(error => {
-        if (serial === searchSerial) {
-          results.replaceChildren(escapeNotNeeded('p', 'city-search-hint', error.message));
-        }
-      });
-  } else display(city?.search?.(query,14) || []);
-}
-
-function cityStatus(message, isError = false) {
-  const target = el('city-load-status');
-  if (target) {
-    target.textContent = message;
-    target.classList.toggle('is-error', isError);
-  }
-}
-function staleCity() {
-  indexedWorld=null;
-  indexedTilesSerial++;
-  clearTimeout(indexedCameraTimer);
-  cityArchive = null;
-  cityLoaded = false;
-  cityLoadGeneration++;
-  cityLoading = false;
-  if (window.location.hash === '#city') loadCityArchive();
-  else city?.update(viewState);
-}
-
-function onCityCameraChange() {
-  if (!indexedWorld || window.location.hash !== '#city') return;
-  clearTimeout(indexedCameraTimer);
-  indexedCameraTimer = setTimeout(() => loadIndexedTiles(cityLoadGeneration), 240);
-}
-async function loadIndexedTiles(generation) {
-  if (!indexedWorld || !city?.getViewport || generation !== cityLoadGeneration ||
-      window.location.hash !== '#city') return;
-  const ticket = ++indexedTilesSerial;
-  const view = city.getViewport();
-  const limit = Number(el('city-quality').value) || 3500;
-  const page = await api('/api/city/world/tiles?x=' + encodeURIComponent(view.x) +
-    '&y=' + encodeURIComponent(view.y) + '&radius=' + encodeURIComponent(view.radius) +
-    '&limit=' + limit);
-  if (ticket !== indexedTilesSerial || generation !== cityLoadGeneration || !indexedWorld) return;
-  if (!page.ready || !Array.isArray(page.buildings)) throw new Error('Индекс города обновляется. Нажмите «Обновить город».');
-  city.updateScene({
-    districts:indexedWorld.districts,
-    buildings:page.buildings,roads:[],
-    stats:{
-      districts:indexedWorld.districts.length,
-      buildings:indexedWorld.total,connections:0,
-      notes:0,dialogues:0,knowledge:0
-    }
-  },false);
-  const focused = indexedFocus;
-  indexedFocus = null;
-  if (focused) city.focus(focused);
-  cityStatus('Полный архив: ' + indexedWorld.total.toLocaleString('ru-RU') +
-    ' записей · видимая зона: ' + page.displayed.toLocaleString('ru-RU') +
-    ' объектов · серверный индекс · WebGL 3D');
-}
-async function loadIndexedCity(generation,first) {
-  let status=first;
-  while (!status.ready) {
-    if (generation!==cityLoadGeneration)return;
-    if (status.state==='error') throw new Error(status.error || 'Ошибка индекса памяти');
-    cityStatus('Сервер индексирует память: ' +
-      Number(status.progress||0).toLocaleString('ru-RU') + ' / ' +
-      Number(status.total||0).toLocaleString('ru-RU') + ' записей…');
-    await new Promise(resolve=>setTimeout(resolve,500));
-    if (generation!==cityLoadGeneration)return;
-    status=await api('/api/city/world/status');
-  }
-  if (generation!==cityLoadGeneration)return;
-  indexedWorld=status.index;
-  cityArchive={indexed:true};
-  cityLoaded=true;
-  // Global district anchors are cheap; only viewport buildings are sent to GPU.
-  city.updateScene({
-    districts:indexedWorld.districts,
-    buildings:[],roads:[],
-    stats:{districts:indexedWorld.districts.length,buildings:indexedWorld.total,
-      connections:0,notes:0,dialogues:0,knowledge:0}
-  },true);
-  await loadIndexedTiles(generation);
-  renderCitySearch();
-}
-
-async function loadCityArchive() {
-  if (cityLoading || !city) return;
-  const generation = ++cityLoadGeneration;
-  cityLoading = true;
-  cityLoaded = false;
-  cityStatus('Читаю локальный архив…');
-  // Compact entries: one preview and original text length per record.
-  // Full text remains in PostgreSQL/JSON and is requested on demand.
-  const archive = { notes: [], messages: [], knowledge: [] };
-  cityArchive = archive;
-  let loaded = 0, total = 0, redrawAt = 400;
-  try {
-    // Native WebGL uses the server tile index; Canvas fallback retains the legacy reader.
-    if (city?.is3D && city?.updateScene) {
-      const status = await api('/api/city/world/status');
-      if (generation !== cityLoadGeneration) return;
-      if (status?.supported) {
-        await loadIndexedCity(generation,status);
-        return;
-      }
-    }
-    let stateRevision = null;
-    for (const kind of ['notes', 'messages', 'knowledge']) {
-      let offset = 0, revision = null, more = true;
-      while (more) {
-        const page = await api('/api/city/archive?compact=1&kind=' + kind +
-          '&offset=' + offset + '&limit=200');
-        if (generation !== cityLoadGeneration) return;
-        if (!Array.isArray(page.items) || !Number.isSafeInteger(page.total) ||
-            page.total < 0 || page.items.length > 200 ||
-            page.offset !== offset || page.kind !== kind) {
-          throw new Error('Сервер вернул некорректную страницу архива.');
-        }
-        if (revision !== null && page.revision !== revision) {
-          throw new Error('Архив изменился во время чтения. Нажмите «Обновить город».');
-        }
-        if (kind !== 'knowledge' && stateRevision !== null && page.revision !== stateRevision) {
-          throw new Error('Архив изменился между загрузкой заметок и сообщений.');
-        }
-        revision = page.revision;
-        if (kind === 'notes' && page.revision !== null) stateRevision = page.revision;
-        archive[kind].push(...page.items);
-        loaded += page.items.length;
-        if (offset === 0) total += page.total;
-        offset += page.items.length;
-        more = Boolean(page.hasMore);
-        cityStatus('Читаю память: ' + loaded.toLocaleString('ru-RU') +
-          ' / ' + total.toLocaleString('ru-RU') + ' записей…');
-        if (more && page.items.length === 0) {
-          throw new Error('Сервер не продвинул позицию архива.');
-        }
-        // Logarithmic drawing checkpoints: 400, 800, 1600, 3200 ...
-        // This is much cheaper than rebuilding the whole 3D scene after every page.
-        if (loaded >= redrawAt && city && window.location.hash === '#city') {
-          city.update(archive);
-          renderCitySearch();
-          redrawAt *= 2;
-          await new Promise(resolve => requestAnimationFrame(resolve));
-          if (generation !== cityLoadGeneration) return;
-        }
-      }
-    }
-    if (generation !== cityLoadGeneration) return;
-    cityLoaded = true;
-    city.update(archive);
-    renderCitySearch();
-    const count = archive.notes.length + archive.messages.length + archive.knowledge.length;
-    cityStatus('Полный архив: ' + count.toLocaleString('ru-RU') +
-      ' записей · ' + (city.is3D ? 'WebGL 3D' : 'Canvas 2D') +
-      ' · превью сохранены локально');
-  } catch (error) {
-    if (generation !== cityLoadGeneration) return;
-    cityLoaded = false;
-    cityStatus('Ошибка загрузки: ' + (error.message || 'неизвестная'), true);
-    notify('Не удалось загрузить полный архив города', true);
-  } finally {
-    if (generation === cityLoadGeneration) cityLoading = false;
-  }
-}
+function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
 
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
-el('city-reload').addEventListener('click', staleCity);
-el('city-quality').addEventListener('change', () => {
-  city?.setQuality?.(Number(el('city-quality').value));
-  if (indexedWorld) loadIndexedTiles(cityLoadGeneration).catch(e => notify(e.message,true));
-});
-el('city-search-input').addEventListener('input', () => {
-  clearTimeout(citySearchDelay);
-  citySearchDelay = setTimeout(renderCitySearch, 180);
-});
-el('orb-open').addEventListener('click', () => go('city'));
+el('orb-open').addEventListener('click', () => go('memory'));
 el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
@@ -405,7 +169,7 @@ el('note-form').addEventListener('submit', event => {
     const title = el('note-title').value.trim(), body = el('note-body').value;
     const result = await api('/api/notes', { method: 'POST', body: { title, body } });
     viewState.notes.unshift(result.note);
-    el('note-form').reset(); render(); staleCity(); notify('Знание сохранено локально');
+    el('note-form').reset(); render();  notify('Знание сохранено локально');
   });
 });
 el('task-form').addEventListener('submit', event => {
@@ -474,14 +238,14 @@ el('chat-form').addEventListener('submit', event => {
       const result = await api('/api/chat', { method: 'POST', body: { prompt } });
       viewState.messages = result.messages;
       el('chat-input').value = '';
-      render(); staleCity();
+      render(); 
     } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false; el('chat-input').focus(); }
   });
 });
 el('clear-chat').addEventListener('click', () => run(async () => {
   if (!viewState.messages.length || !window.confirm('Очистить историю диалога на этом устройстве?')) return;
   const result = await api('/api/chat/clear', { method: 'POST', body: {} });
-  viewState.messages = result.messages; render(); staleCity(); notify('История диалога очищена');
+  viewState.messages = result.messages; render();  notify('История диалога очищена');
 }));
 
 function showFailedStart(message) {
@@ -490,63 +254,6 @@ function showFailedStart(message) {
   el('connection-detail').textContent = message + ' Проверьте окно BAT и журналы в папке logs.';
   notify(message, true);
 }
-
-const cityConfig = {
-  canvas: el('city-canvas'),
-  detail: el('city-detail'),
-  districtsList: el('city-district-list'),
-  async onInspect(record, container, button) {
-    const kind = record.kind === 'note' ? 'notes'
-      : record.kind === 'chat' ? 'messages' : 'knowledge';
-    const selected = container.dataset.selectedRecord;
-    button.disabled = true;
-    button.textContent = 'Читаю исходную запись…';
-    try {
-      const result = await api('/api/city/entry?kind=' + kind +
-        '&id=' + encodeURIComponent(record.sourceId));
-      if (container.dataset.selectedRecord !== selected) return;
-      const entry = result.entry;
-      const content = record.kind === 'note' ? ((entry.title || '') + '\n\n' + (entry.body || ''))
-        : entry.content;
-      const field = container.querySelector('.city-detail-body');
-      if (field) {
-        field.textContent = String(content || '');
-        field.classList.add('city-full-text');
-      }
-      button.textContent = 'Полный текст загружен';
-    } catch (error) {
-      if (container.dataset.selectedRecord !== selected) return;
-      button.textContent = 'Повторить чтение';
-      button.disabled = false;
-      notify(error.message || 'Не удалось прочитать запись', true);
-    }
-  },
-  onCameraChange: onCityCameraChange,
-  onNavigate(record) {
-    if (record.kind === 'note') {
-      go('memory');
-      const note = Array.from(document.querySelectorAll('[data-note-id]')).find(item => item.dataset.noteId === record.sourceId);
-      if (note) {
-        note.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        note.classList.add('city-highlight-note');
-        setTimeout(() => note.classList.remove('city-highlight-note'), 1400);
-      }
-    } else if (record.kind === 'chat') {
-      toggleChat(true);
-    }
-  }
-};
-try {
-  city = globalThis.TsukireiCity3D?.startCity(cityConfig);
-} catch (error) {
-  console.warn('3D renderer failed; switching to Canvas 2D:', error);
-  const old = cityConfig.canvas;
-  const replacement = old.cloneNode(false);
-  old.replaceWith(replacement);
-  cityConfig.canvas = replacement;
-}
-if (!city) city = globalThis.TsukireiCity?.startCity(cityConfig);
-if (!city) cityStatus('Визуализация недоступна в этом браузере.', true);
 
 api('/api/state').then(data => {
   Object.assign(viewState, data);
