@@ -6,6 +6,10 @@ const viewState = { notes: [], tasks: [], messages: [], settings: { configured: 
 let busy = false;
 let toastTimer;
 let city = null;
+let cityArchive = null;
+let cityLoadGeneration = 0;
+let cityLoading = false;
+let cityLoaded = false;
 
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
@@ -64,6 +68,7 @@ function go(page) {
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
   city?.activate(page === 'city');
+  if (page === 'city' && !cityLoaded && !cityLoading) loadCityArchive();
   window.location.hash = page;
 }
 function renderStatus() {
@@ -108,7 +113,7 @@ function renderNotes() {
     top.append(removeButton(() => run(async () => {
       await api('/api/notes/' + encodeURIComponent(note.id), { method: 'DELETE' });
       viewState.notes = viewState.notes.filter(item => item.id !== note.id);
-      render(); notify('Запись удалена');
+      render(); staleCity(); notify('Запись удалена');
     })));
     article.append(top);
     if (note.body) article.append(escapeNotNeeded('p', 'note-text', note.body));
@@ -159,9 +164,72 @@ function renderChat() {
   });
   list.scrollTop = list.scrollHeight;
 }
-function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); city?.update(viewState); }
+function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); if (!cityArchive) city?.update(viewState); }
+
+
+function cityStatus(message, isError = false) {
+  const target = el('city-load-status');
+  if (target) {
+    target.textContent = message;
+    target.classList.toggle('is-error', isError);
+  }
+}
+function staleCity() {
+  cityArchive = null;
+  cityLoaded = false;
+  cityLoadGeneration++;
+  cityLoading = false;
+  if (window.location.hash === '#city') loadCityArchive();
+  else city?.update(viewState);
+}
+async function loadCityArchive() {
+  if (cityLoading || !city) return;
+  const generation = ++cityLoadGeneration;
+  cityLoading = true;
+  cityStatus('Читаю локальный архив…');
+  const archive = { notes: [], messages: [], knowledge: [] };
+  let loaded = 0, total = 0;
+  try {
+    for (const kind of ['notes', 'messages', 'knowledge']) {
+      let offset = 0, revision = null, more = true;
+      while (more) {
+        const page = await api('/api/city/archive?kind=' + kind + '&offset=' + offset + '&limit=200');
+        if (generation !== cityLoadGeneration) return;
+        if (!Array.isArray(page.items) || !Number.isSafeInteger(page.total) ||
+            page.items.length > 200 || page.offset !== offset || page.kind !== kind) {
+          throw new Error('Сервер вернул некорректную страницу архива.');
+        }
+        if (revision !== null && page.revision !== revision)
+          throw new Error('Архив изменился во время чтения. Нажмите «Обновить город».');
+        revision = page.revision;
+        archive[kind].push(...page.items);
+        loaded += page.items.length;
+        if (offset === 0) total += page.total;
+        offset += page.items.length;
+        more = Boolean(page.hasMore);
+        cityStatus('Загружено ' + loaded.toLocaleString('ru-RU') + ' из ' +
+          total.toLocaleString('ru-RU') + ' записей…');
+        if (more && !page.items.length) throw new Error('Сервер не продвинул позицию архива.');
+      }
+    }
+    if (generation !== cityLoadGeneration) return;
+    cityArchive = archive;
+    cityLoaded = true;
+    city.update(cityArchive);
+    const count = cityArchive.notes.length + cityArchive.messages.length + cityArchive.knowledge.length;
+    cityStatus('Полный архив: ' + count.toLocaleString('ru-RU') + ' записей · ' +
+      (city.is3D ? 'WebGL 3D' : 'Canvas 2D'));
+  } catch (error) {
+    if (generation !== cityLoadGeneration) return;
+    cityStatus('Ошибка загрузки: ' + (error.message || 'неизвестная'), true);
+    notify('Не удалось загрузить полный архив города', true);
+  } finally {
+    if (generation === cityLoadGeneration) cityLoading = false;
+  }
+}
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
+el('city-reload').addEventListener('click', staleCity);
 el('orb-open').addEventListener('click', () => go('city'));
 el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
@@ -172,7 +240,7 @@ el('note-form').addEventListener('submit', event => {
     const title = el('note-title').value.trim(), body = el('note-body').value;
     const result = await api('/api/notes', { method: 'POST', body: { title, body } });
     viewState.notes.unshift(result.note);
-    el('note-form').reset(); render(); notify('Знание сохранено локально');
+    el('note-form').reset(); render(); staleCity(); notify('Знание сохранено локально');
   });
 });
 el('task-form').addEventListener('submit', event => {
@@ -241,14 +309,14 @@ el('chat-form').addEventListener('submit', event => {
       const result = await api('/api/chat', { method: 'POST', body: { prompt } });
       viewState.messages = result.messages;
       el('chat-input').value = '';
-      render();
+      render(); staleCity();
     } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false; el('chat-input').focus(); }
   });
 });
 el('clear-chat').addEventListener('click', () => run(async () => {
   if (!viewState.messages.length || !window.confirm('Очистить историю диалога на этом устройстве?')) return;
   const result = await api('/api/chat/clear', { method: 'POST', body: {} });
-  viewState.messages = result.messages; render(); notify('История диалога очищена');
+  viewState.messages = result.messages; render(); staleCity(); notify('История диалога очищена');
 }));
 
 function showFailedStart(message) {
@@ -258,7 +326,7 @@ function showFailedStart(message) {
   notify(message, true);
 }
 
-city = globalThis.TsukireiCity?.startCity({
+const cityConfig = {
   canvas: el('city-canvas'),
   detail: el('city-detail'),
   districtsList: el('city-district-list'),
@@ -271,11 +339,22 @@ city = globalThis.TsukireiCity?.startCity({
         note.classList.add('city-highlight-note');
         setTimeout(() => note.classList.remove('city-highlight-note'), 1400);
       }
-    } else {
+    } else if (record.kind === 'chat') {
       toggleChat(true);
     }
   }
-});
+};
+try {
+  city = globalThis.TsukireiCity3D?.startCity(cityConfig);
+} catch (error) {
+  console.warn('3D renderer failed; switching to Canvas 2D:', error);
+  const old = cityConfig.canvas;
+  const replacement = old.cloneNode(false);
+  old.replaceWith(replacement);
+  cityConfig.canvas = replacement;
+}
+if (!city) city = globalThis.TsukireiCity?.startCity(cityConfig);
+if (!city) cityStatus('Визуализация недоступна в этом браузере.', true);
 
 api('/api/state').then(data => {
   Object.assign(viewState, data);

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/city-model.js" defer></script>
   <script src="/city.js" defer></script>
+  <script src="/city-3d.js" defer></script>
   <script src="/main.js" defer></script>
 </head>
 <body>
@@ -53,7 +54,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.3</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.4</span></div>
       </header>
 
       <main class="main">
@@ -107,7 +108,7 @@
           <div class="page-heading">
             <div><div class="eyebrow"><span class="small-line"></span> MEMORY ATLAS / LOCAL WORLD</div>
               <h1 id="city-title">Город <em>памяти.</em></h1>
-              <p>Районы — темы, здания — реальные записи и диалоги, дороги — совпадения значимых слов.</p>
+              <p>Районы — темы, 3D-здания — записи полного архива, дороги — совпадения значимых слов.</p>
             </div>
             <span class="date-chip" id="city-count">0 записей</span>
           </div>
@@ -122,8 +123,14 @@
                 <div class="panel-kicker">СОСТОЯНИЕ ГОРОДА</div>
                 <strong id="city-stats">0 районов · 0 зданий · 0 связей</strong>
                 <p>Высота здания зависит от объёма текста. Районы группируются по ключевым словам, дороги показывают общие слова между районами.</p>
-                <button class="ghost-button" id="city-fit" type="button">Показать весь город</button>
-                <div class="city-help">Перетаскивание — перемещение · колесо — масштаб · клик — открыть данные</div>
+                <div class="city-view-controls">
+                  <button class="ghost-button" id="city-fit" type="button">Показать весь город</button>
+                  <button class="ghost-button" id="city-zoom-in" type="button" aria-label="Приблизить город">+</button>
+                  <button class="ghost-button" id="city-zoom-out" type="button" aria-label="Отдалить город">−</button>
+                </div>
+                <div id="city-load-status" class="city-load-status" role="status" aria-live="polite">Архив ещё не загружен</div>
+                <button class="text-action city-reload" id="city-reload" type="button">Обновить город ↻</button>
+                <div class="city-help">Левая кнопка — поворот 3D · Shift/правая — перемещение · колесо — масштаб · клик — запись</div>
               </div>
               <div class="glass-panel city-inspector"><span class="panel-kicker">СВЕДЕНИЯ О ЗДАНИИ</span><div id="city-detail" class="city-detail" aria-live="polite"><p class="city-instruction">Нажмите на здание, чтобы увидеть исходную запись.</p></div></div>
               <div class="glass-panel city-districts"><span class="panel-kicker">РАЙОНЫ</span><div id="city-district-list" class="city-district-list"></div></div>

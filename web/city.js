@@ -238,13 +238,15 @@
         const node = root.document.createElement(tag); node.className = cls;
         node.textContent = value; detail.append(node); return node;
       }
-      add('span', 'panel-kicker', record.kind === 'note' ? 'ЗАПИСЬ ПАМЯТИ' : 'РЕАЛЬНЫЙ ДИАЛОГ');
+      add('span', 'panel-kicker', record.kind === 'note' ? 'ЗАПИСЬ ПАМЯТИ' : record.kind === 'knowledge' ? 'БАЗА ЗНАНИЙ' : 'РЕАЛЬНЫЙ ДИАЛОГ');
       add('h3', 'city-detail-title', record.title);
       add('p', 'city-detail-meta', record.districtName + ' · ' + record.wordsCount + ' значимых слов');
       add('p', 'city-detail-body', record.body.slice(0, 560) || 'Заметка без дополнительного текста.');
-      const button = add('button', 'city-open-button', record.kind === 'note' ? 'Показать заметку →' : 'Открыть чат →');
-      button.type = 'button';
-      button.addEventListener('click', () => onNavigate?.(record));
+      if (record.kind !== 'knowledge') {
+        const button = add('button', 'city-open-button', record.kind === 'note' ? 'Показать заметку →' : 'Открыть чат →');
+        button.type = 'button';
+        button.addEventListener('click', () => onNavigate?.(record));
+      }
     }
     function showDistricts() {
       districtsList.replaceChildren();
