@@ -121,7 +121,7 @@ function dispose(gl,m){
  if(m.ib)gl.deleteBuffer(m.ib);
  if(m.buffer)gl.deleteBuffer(m.buffer);
 }
-function startCity({canvas,detail,districtsList,onNavigate}){
+function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  const model=root.TsukireiCityModel;
  const gl=canvas.getContext('webgl2',{alpha:false,depth:true,antialias:true});
  if(!model||!gl)return null;
@@ -213,7 +213,9 @@ function startCity({canvas,detail,districtsList,onNavigate}){
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST);gl.disable(gl.BLEND);
   drawLines(grid,view);drawLines(roads,view);
-  blocks(plates,view,false,false);blocks(buildings,view,false,true);
+  blocks(plates,view,false,false);
+  // Render smaller distant windows only when zoom and dataset size justify the GPU cost.
+  blocks(buildings,view,false,distance<4000 && scene.stats.buildings<40000);
   gl.bindVertexArray(null);
  }
  function schedule(){if(active&&!lost&&!raf)raf=root.requestAnimationFrame(render);}
@@ -257,6 +259,7 @@ function startCity({canvas,detail,districtsList,onNavigate}){
  function renderDetail(){
   const item=scene.buildings.find(b=>b.id===selected);
   detail.replaceChildren();
+  detail.dataset.selectedRecord = item?.id || '';
   const add=(tag,cls,txt)=>{
    const n=root.document.createElement(tag);if(cls)n.className=cls;
    n.textContent=txt;detail.append(n);return n;
@@ -270,7 +273,9 @@ function startCity({canvas,detail,districtsList,onNavigate}){
   add('p','city-detail-meta',item.districtName+' · '+item.wordsCount+' значимых слов');
   add('p','city-detail-body',item.body.slice(0,1100));
   if(item.kind==='knowledge')add('p','city-detail-meta','Источник: '+(item.source||'не указан'));
-  else{
+  const full=add('button','city-open-button city-full-button','Прочитать полный текст');
+  full.type='button';full.addEventListener('click',()=>onInspect?.(item,detail,full));
+  if(item.kind!=='knowledge'){
    const b=add('button','city-open-button',item.kind==='note'?'Перейти к заметке →':'Открыть чат →');
    b.type='button';b.addEventListener('click',()=>onNavigate?.(item));
   }

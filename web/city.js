@@ -1,7 +1,7 @@
 /* Tsukirei City — zero-dependency isometric Canvas renderer. */
 (function (root) {
   'use strict';
-  function startCity({ canvas, detail, districtsList, onNavigate }) {
+  function startCity({ canvas, detail, districtsList, onNavigate, onInspect }) {
     const model = root.TsukireiCityModel;
     if (!model || !canvas || !canvas.getContext) return null;
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -226,6 +226,7 @@
     function showSelected() {
       const record = scene.buildings.find(item => item.id === selected);
       detail.replaceChildren();
+      detail.dataset.selectedRecord = record?.id || '';
       if (!record) {
         const tip = root.document.createElement('p');
         tip.className = 'city-instruction';
@@ -242,6 +243,9 @@
       add('h3', 'city-detail-title', record.title);
       add('p', 'city-detail-meta', record.districtName + ' · ' + record.wordsCount + ' значимых слов');
       add('p', 'city-detail-body', record.body.slice(0, 560) || 'Заметка без дополнительного текста.');
+      const full = add('button', 'city-open-button city-full-button', 'Прочитать полный текст');
+      full.type = 'button';
+      full.addEventListener('click', () => onInspect?.(record, detail, full));
       if (record.kind !== 'knowledge') {
         const button = add('button', 'city-open-button', record.kind === 'note' ? 'Показать заметку →' : 'Открыть чат →');
         button.type = 'button';

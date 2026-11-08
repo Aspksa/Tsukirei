@@ -43,3 +43,7 @@
 .city-stage::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 30%,rgba(125,87,45,.13),transparent 65%);pointer-events:none;z-index:1}
 .city-stage canvas{position:relative;z-index:0}
 .city-stage-footer{z-index:2}
+
+/* Compact overview only; retrieve the original text when clicked. */
+.city-full-button{margin-top:13px;background:#31281d;color:#e5c48b}
+.city-full-text{max-height:430px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
