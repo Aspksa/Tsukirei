@@ -79,6 +79,12 @@ try {
     const text=await evaluate("document.getElementById('city-load-status')?.textContent || ''");
     return text.includes('Полный архив') ? text : null;
   },'full city archive');
+  // Search the actual city data, not a mocked demonstration list.
+  await evaluate("(() => { const el=document.getElementById('city-search-input');el.value='Архитектура';el.dispatchEvent(new Event('input',{bubbles:true}));return true; })()");
+  await until(() => evaluate("document.querySelectorAll('.city-search-result').length === 1"), 'city search results');
+  await evaluate("document.querySelector('.city-search-result').click(); true");
+  const foundTitle = await evaluate("document.querySelector('.city-detail-title')?.textContent || ''");
+  assert.match(foundTitle, /Архитектура памяти/);
   // Select a real city district, then resolve full text through the local API.
   await evaluate("document.querySelector('.city-district-button').click(); true");
   await until(() => evaluate("!!document.querySelector('.city-full-button')"), 'selected building');
