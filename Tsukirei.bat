@@ -217,9 +217,25 @@ function Ensure-PortablePostgres {
         }
     } else {
         Say ('Инициализирую PostgreSQL + pgvector: ' + $store)
-        $output = (& $exe start --name tsukirei --port ([int]$config.port) --data-dir $db --username tsukirei --password ([string]$config.password) --database tsukirei --config 'listen_addresses=127.0.0.1' --config 'shared_buffers=64MB' --config 'work_mem=8MB' 2>&1 | Out-String)
-        if ($LASTEXITCODE -ne 0) {
-            throw ('PostgreSQL не запустился: ' + $output.Replace([string]$config.password, '[скрыто]'))
+        # Do not pipe pg0 stdout into Out-String: postgres workers inherit pipe
+        # handles and keep the PowerShell pipeline open indefinitely on Windows.
+        $pgOut = Join-Path $logs ('pg0-' + $stamp + '-out.log')
+        $pgErr = Join-Path $logs ('pg0-' + $stamp + '-err.log')
+        $argsPg = 'start --name tsukirei --port ' + [string]$config.port +
+            ' --data-dir "' + $db + '" --username tsukirei --password ' + [string]$config.password +
+            ' --database tsukirei --config listen_addresses=127.0.0.1 --config shared_buffers=64MB --config work_mem=8MB'
+        $pgProcess = Start-Process -FilePath $exe -ArgumentList $argsPg -NoNewWindow -PassThru -RedirectStandardOutput $pgOut -RedirectStandardError $pgErr
+        try {
+            if (-not $pgProcess.WaitForExit(120000)) {
+                try { $pgProcess.Kill() } catch { }
+                throw 'Программа запуска PostgreSQL не завершилась за 120 секунд. Проверьте logs/pg0-*-err.log.'
+            }
+            if ($pgProcess.ExitCode -ne 0) {
+                $pgText = ((Get-ExitText $pgErr) + (Get-ExitText $pgOut)).Replace([string]$config.password, '[скрыто]')
+                throw ('PostgreSQL не запустился: ' + $pgText)
+            }
+        } finally {
+            $pgProcess.Dispose()
         }
     }
     if (-not (Test-Port ([int]$config.port))) { throw 'Сервер PostgreSQL не отвечает.' }
