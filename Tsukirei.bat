@@ -14,10 +14,8 @@ set "TSUKIREI_EXIT=%ERRORLEVEL%"
 if not "%TSUKIREI_EXIT%"=="0" (
     echo.
     echo [Tsukirei] Launcher stopped with code %TSUKIREI_EXIT%.
-    if /I not "%CI%"=="true" (
-        echo Press any key to close this window.
-        pause >nul
-    )
+    echo Press any key to close this window.
+    pause >nul
 )
 exit /b %TSUKIREI_EXIT%
 ### TSUKIREI_PS_BEGIN ###
@@ -107,109 +105,6 @@ function Get-Sha256([string]$path) {
     try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-', '') }
     finally { $stream.Dispose(); $hash.Dispose() }
 }
-function Ensure-PortablePostgres {
-    if ($env:TSUKIREI_NO_AUTO_POSTGRES -eq '1') {
-        Say 'Автозапуск PostgreSQL отключён для этого запуска.'
-        return
-    }
-    if ($env:TSUKIREI_DATABASE_URL -or $env:DATABASE_URL) {
-        Say 'Использую PostgreSQL из переменной окружения.'
-        return
-    }
-    $data = Join-Path $root 'data'
-    $settings = Join-Path $data 'postgres-settings.json'
-    $portable = Join-Path $data 'portable-postgres.json'
-    if ((Test-Path -LiteralPath $settings) -and -not (Test-Path -LiteralPath $portable)) {
-        Say 'Использую существующие настройки PostgreSQL. Убедитесь, что сервер запущен.'
-        return
-    }
-    if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
-        Say 'Автоматический переносимый PostgreSQL поддерживается на Windows x64. Настройте PostgreSQL вручную.'
-        return
-    }
-    New-Item -ItemType Directory -Path $data -Force | Out-Null
-    $pgFolder = Join-Path $runtime 'pg0'
-    $exe = Join-Path $pgFolder 'pg0.exe'
-    $expected = 'da580cc8fd390ba01158bea192d6bb6d4b0f583abc468ced7f9c582370c34cb6'
-    if (-not (Test-Path -LiteralPath $exe) -or (Get-Sha256 $exe).ToLowerInvariant() -ne $expected) {
-        Say 'Загружаю переносимый PostgreSQL 18 + pgvector (pg0 v0.16.1, официальный релиз проекта)...'
-        New-Item -ItemType Directory -Path $pgFolder -Force | Out-Null
-        $tmp = Join-Path $pgFolder ('pg0-' + [guid]::NewGuid().ToString('N') + '.tmp')
-        try {
-            Invoke-WebRequest -Uri 'https://github.com/vectorize-io/pg0/releases/download/v0.16.1/pg0-windows-x86_64.exe' -OutFile $tmp -UseBasicParsing -TimeoutSec 240
-            if ((Get-Sha256 $tmp).ToLowerInvariant() -ne $expected) { throw 'SHA-256 не совпадает. Исполняемый файл PostgreSQL не будет запущен.' }
-            Move-Item -LiteralPath $tmp -Destination $exe -Force
-        } finally {
-            if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
-        }
-    }
-    if (Test-Path -LiteralPath $portable) {
-        $config = Get-Content -LiteralPath $portable -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($config.version -ne 1 -or $config.port -lt 1024 -or $config.port -gt 65535 -or $config.password -notmatch '^[0-9a-f]{64}$') {
-            throw 'Повреждены настройки data/portable-postgres.json. Не удаляйте папку data/postgres — восстановите конфигурацию из резервной копии.'
-        }
-    } else {
-        $port = 55432
-        foreach ($candidate in 55432..55460) {
-            if (-not (Test-Port $candidate)) { $port = $candidate; break }
-        }
-        if (Test-Port $port) { throw 'Нет свободного порта PostgreSQL в диапазоне 55432–55460.' }
-        $random = New-Object byte[] 32
-        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
-        try { $rng.GetBytes($random) } finally { $rng.Dispose() }
-        $password = ([BitConverter]::ToString($random)).Replace('-', '').ToLowerInvariant()
-        $config = [pscustomobject]@{ version = 1; port = $port; password = $password }
-        $utf8 = New-Object System.Text.UTF8Encoding($false)
-    }
-    # PostgreSQL initdb on Windows can fail with non-ASCII paths. Prefer an ASCII
-    # NTFS junction (not SUBST; chmod/initdb may reject SUBST drive paths).
-    $alias = $null
-    if ($root -cmatch '^[\x00-\x7F]+$') {
-        $alias = $root
-    } else {
-        $digest = [Security.Cryptography.SHA256]::Create()
-        try { $hash = ([BitConverter]::ToString($digest.ComputeHash([Text.Encoding]::UTF8.GetBytes($root)))).Replace('-', '').Substring(0, 12) }
-        finally { $digest.Dispose() }
-        $bases = @([IO.Path]::GetPathRoot($root), [Environment]::GetFolderPath('CommonDocuments'), [Environment]::GetFolderPath('CommonApplicationData'))
-        foreach ($base in $bases) {
-            if (-not $base -or $base -cnotmatch '^[\x00-\x7F]+$') { continue }
-            $candidate = Join-Path $base ('Tsukirei_' + $hash)
-            try {
-                if (Test-Path -LiteralPath $candidate) {
-                    $item = Get-Item -LiteralPath $candidate -Force
-                    if ($item.LinkType -ne 'Junction' -or @($item.Target)[0].TrimEnd('\') -ine $root.TrimEnd('\')) {
-                        throw 'ASCII alias is owned by another directory'
-                    }
-                } else {
-                    New-Item -ItemType Junction -Path $candidate -Target $root -ErrorAction Stop | Out-Null
-                }
-                $alias = $candidate
-                break
-            } catch {
-                Say ('Не удалось создать NTFS-псевдоним в ' + $base + ': ' + $_.Exception.Message)
-            }
-        }
-        if (-not $alias) { throw 'Не удалось получить ASCII-путь для PostgreSQL. Проверьте NTFS и права на создание junction.' }
-    }
-    Say ('Путь базы для PostgreSQL: ' + $alias)
-    $pgUrl = 'postgresql://tsukirei:' + $config.password + '@127.0.0.1:' + $config.port + '/tsukirei'
-    $settingsObject = [pscustomobject]@{ url = $pgUrl }
-    if (-not (Test-Path -LiteralPath $settings)) {
-        $utf8 = New-Object System.Text.UTF8Encoding($false)
-        [IO.File]::WriteAllText($settings, ($settingsObject | ConvertTo-Json -Compress), $utf8)
-    }
-    $env:PG0_HOME = Join-Path $alias '.runtime\pg0-home'
-    New-Item -ItemType Directory -Path $env:PG0_HOME -Force | Out-Null
-    $dbDir = Join-Path $alias 'data\postgres'
-    Say ('Проверяю PostgreSQL + pgvector (порт ' + $config.port + ')...')
-    # pg0 starts the server in the background; PG0_HOME keeps even its binaries on this drive.
-    $outText = (& $exe start --name tsukirei --port ([int]$config.port) --data-dir $dbDir --username tsukirei --password ([string]$config.password) --database tsukirei --config 'listen_addresses=127.0.0.1' --config 'shared_buffers=64MB' --config 'maintenance_work_mem=128MB' --config 'work_mem=8MB' 2>&1 | Out-String)
-    if ($LASTEXITCODE -ne 0) {
-        throw ('Переносимый PostgreSQL не запустился: ' + $outText.Replace([string]$config.password, '[hidden]'))
-    }
-    if (-not (Test-Port ([int]$config.port))) { throw 'PostgreSQL не отвечает на сохранённом порту. Проверьте конфликт портов.' }
-    Say 'PostgreSQL + pgvector доступны локально. Данные остаются в папке data.'
-}
 function Test-Port([int]$number) {
     $tcp = New-Object Net.Sockets.TcpClient
     try {
@@ -238,7 +133,6 @@ if ($diagnose) {
     $node = Find-Node
     Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
-    Say "PostgreSQL: $(if ((Test-Path -LiteralPath (Join-Path $root 'data/postgres-settings.json')) -or $env:TSUKIREI_DATABASE_URL -or $env:DATABASE_URL) { 'настроен' } else { 'подключится автоматически при запуске (Windows x64)' })"
     Say 'Диагностика завершена.'
     exit 0
 }
@@ -251,7 +145,6 @@ if (-not $app) {
 
 $mutex = $null
 $process = $null
-$script:PortableExe = $null
 try {
     New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -316,8 +209,6 @@ try {
         Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
     }
 
-    Ensure-PortablePostgres
-
     $output = Join-Path $logs "$stamp-out.log"
     $errors = Join-Path $logs "$stamp-error.log"
     $args = '"' + $npmCli + '" run ' + $script
@@ -371,9 +262,6 @@ try {
     if ($process) {
         try { $process.Refresh(); if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch { }
         $process.Dispose()
-    }
-    if ($script:PortableExe) {
-        try { & $script:PortableExe stop --name tsukirei 2>$null | Out-Null } catch { }
     }
     if ($mutex) {
         try { $mutex.ReleaseMutex() } catch { }
