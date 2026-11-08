@@ -119,6 +119,11 @@
               <div class="city-stage-footer"><span class="city-indicator"></span><span>ЛОКАЛЬНЫЕ ДАННЫЕ · БЕЗ ОБЛАЧНЫХ ЗАПРОСОВ</span></div>
             </div>
             <aside class="city-sidebar" aria-label="Данные города">
+              <div class="glass-panel city-search">
+                <label class="panel-kicker" for="city-search-input">НАЙТИ ЗДАНИЕ</label>
+                <input id="city-search-input" type="search" autocomplete="off" placeholder="Название или текст знания" aria-label="Поиск по загруженному городу">
+                <div id="city-search-results" class="city-search-results" role="list" aria-live="polite"></div>
+              </div>
               <div class="glass-panel city-overview">
                 <div class="panel-kicker">СОСТОЯНИЕ ГОРОДА</div>
                 <strong id="city-stats">0 районов · 0 зданий · 0 связей</strong>
