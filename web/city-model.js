@@ -20,7 +20,7 @@
   ];
   function tokens(text) {
     const words = String(text || '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || [];
-    return words.filter(word => !STOP.has(word) && !/^\d+$/.test(word)).slice(0, 320);
+    return words.filter(word => !STOP.has(word) && !/^\d+$/.test(word)).slice(0, 96);
   }
   function hash(value) {
     let result = 2166136261;
@@ -39,7 +39,8 @@
       const title = note.title.trim() || 'Без названия';
       const body = typeof note.body === 'string' ? note.body : '';
       items.push({ id: 'note:' + note.id, kind: 'note', sourceId: note.id, title,
-        body, date: note.createdAt || '', words: tokens(title + ' ' + body) });
+        body, fullLength: Number.isFinite(note.fullLength) ? note.fullLength : title.length + body.length,
+        date: note.createdAt || '', words: tokens(title + ' ' + body) });
     }
     for (let i = 0; i < messages.length; i++) {
       const message = messages[i];
@@ -52,8 +53,13 @@
       if (!text) continue;
       const title = text.length > 74 ? text.slice(0, 71) + '…' : text;
       const combined = text + ' ' + response;
+      const sourceLength = Number.isFinite(message.fullLength) ? message.fullLength : text.length;
+      const answerLength = message.role === 'user' && messages[i + 1]?.role === 'assistant'
+        ? (Number.isFinite(messages[i + 1].fullLength) ? messages[i + 1].fullLength : response.length)
+        : 0;
       items.push({ id: 'chat:' + message.id, kind: 'chat', sourceId: message.id, title,
-        body: combined, date: message.createdAt || '', words: tokens(combined) });
+        body: combined, fullLength: sourceLength + answerLength,
+        date: message.createdAt || '', words: tokens(combined) });
     }
     const knowledge = Array.isArray(state?.knowledge) ? state.knowledge : [];
     for (const entry of knowledge) {
@@ -63,7 +69,9 @@
       const title = body.length > 74 ? body.slice(0, 71) + '…' : body;
       const source = typeof entry.source === 'string' ? entry.source : 'knowledge';
       items.push({ id: 'knowledge:' + entry.id, kind: 'knowledge', sourceId: entry.id,
-        title, body, source, date: entry.createdAt || '', words: tokens(body) });
+        title, body, source,
+        fullLength: Number.isFinite(entry.fullLength) ? entry.fullLength : body.length,
+        date: entry.createdAt || '', words: tokens(body) });
     }
     return items;
   }
@@ -111,7 +119,7 @@
       for (let j = 0; j < district.items.length; j++) {
         const item = district.items[j];
         const lexical = item.words.length;
-        const height = Math.round(20 + Math.min(150, Math.log2(lexical + 1) * 20));
+        const height = Math.round(20 + Math.min(180, Math.log2(Math.max(1, item.fullLength) + 1) * 13));
         const x = district.x + (j % ncol - (ncol - 1) / 2) * 43;
         const y = district.y + (Math.floor(j / ncol) - (nrow - 1) / 2) * 43;
         buildings.push({ ...item, district: district.key, districtName: district.name, height,
