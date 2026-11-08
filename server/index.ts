@@ -2,11 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { readFileSync, writeFileSync, renameSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { connectPostgres, emptyState, validateState, type Note, type Task, type State } from './postgres.ts';
 
-type Note = { id: string; title: string; body: string; createdAt: string };
-type Task = { id: string; title: string; done: boolean; createdAt: string };
-type Message = { id: string; role: 'user' | 'assistant'; content: string; createdAt: string };
-type State = { notes: Note[]; tasks: Task[]; messages: Message[] };
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
 
@@ -17,19 +14,31 @@ const cloudPath = join(dataDir, 'cloudru-settings.json');
 const endpoint = 'https://foundation-models.api.cloud.ru/v1';
 const port = Number(process.env.PORT ?? 3000);
 let cloudBusy = false;
+const database = await connectPostgres(dataDir);
 
 class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
 }
-function newState(): State { return { notes: [], tasks: [], messages: [] }; }
-function readState(): State {
-  if (!existsSync(statePath)) return newState();
-  const data = JSON.parse(readFileSync(statePath, 'utf8')) as State;
-  if (!data || !Array.isArray(data.notes) || !Array.isArray(data.tasks) || !Array.isArray(data.messages)) {
-    throw new Error('Файл данных повреждён: ' + statePath);
-  }
-  return data;
+function readLegacyState(): State {
+  if (!existsSync(statePath)) return emptyState();
+  return validateState(JSON.parse(readFileSync(statePath, 'utf8')));
+}
+async function readState(): Promise<State> {
+  return database ? database.read() : readLegacyState();
+}
+// Serialise legacy writes; PostgreSQL uses SELECT ... FOR UPDATE inside a transaction.
+let legacyQueue: Promise<unknown> = Promise.resolve();
+async function mutateState<T>(change: (state: State) => T): Promise<T> {
+  if (database) return database.mutate(change);
+  const pending = legacyQueue.then(() => {
+    const state = readLegacyState();
+    const result = change(state);
+    saveAtomic(statePath, state);
+    return result;
+  });
+  legacyQueue = pending.catch(() => {});
+  return pending;
 }
 function readCloud(): CloudSettings {
   if (!existsSync(cloudPath)) return { apiKey: '', model: '' };
@@ -103,7 +112,7 @@ async function chat(prompt: string) {
   if (cloudBusy) throw new HttpError(429, 'Предыдущий запрос ещё выполняется');
   const cloud = readCloud();
   if (!cloud.apiKey || !cloud.model) throw new HttpError(400, 'В настройках укажите API-ключ и модель Cloud.ru');
-  const state = readState();
+  const state = await readState();
   const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
   cloudBusy = true;
   try {
@@ -122,11 +131,14 @@ async function chat(prompt: string) {
     const answer = result.choices?.[0]?.message?.content;
     if (typeof answer !== 'string' || !answer.trim()) throw new HttpError(502, 'Cloud.ru вернул пустой ответ');
     const now = new Date().toISOString();
-    state.messages.push({ id: randomUUID(), role: 'user', content: prompt, createdAt: now });
-    state.messages.push({ id: randomUUID(), role: 'assistant', content: answer.trim(), createdAt: now });
-    state.messages = state.messages.slice(-250);
-    saveAtomic(statePath, state);
-    return { answer: answer.trim(), messages: state.messages };
+    const messages = await mutateState(state => {
+      state.messages.push({ id: randomUUID(), role: 'user', content: prompt, createdAt: now });
+      state.messages.push({ id: randomUUID(), role: 'assistant', content: answer.trim(), createdAt: now });
+      // PostgreSQL keeps the complete archive; only the legacy JSON mode is capped.
+      if (!database) state.messages = state.messages.slice(-250);
+      return state.messages.slice(-250);
+    });
+    return { answer: answer.trim(), messages };
   } finally { cloudBusy = false; }
 }
 async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -137,39 +149,55 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = req.headers.origin;
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.1.0', local: true }); return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.2.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
   if (method === 'GET' && pathname === '/api/state') {
-    json(res, 200, { ...readState(), settings: settingsPublic(), agents: [] }); return;
+    const state = await readState();
+    json(res, 200, { ...state, messages: state.messages.slice(-250), settings: settingsPublic(), agents: [],
+      database: { engine: database ? 'PostgreSQL + pgvector' : 'JSON (legacy)', connected: Boolean(database) } }); return;
   }
   if (method === 'POST' && pathname === '/api/notes') {
-    const input = await bodyJson(req); const state = readState();
+    const input = await bodyJson(req);
     const note: Note = { id: randomUUID(), title: requiredText(input.title, 'Название', 100), body: typeof input.body === 'string' ? input.body.trim().slice(0, 12000) : '', createdAt: new Date().toISOString() };
-    if (state.notes.length >= 500) throw new HttpError(400, 'Достигнут лимит 500 заметок');
-    state.notes.unshift(note); saveAtomic(statePath, state); json(res, 201, { note }); return;
+    await mutateState(state => {
+      if (!database && state.notes.length >= 500) throw new HttpError(400, 'Достигнут лимит 500 заметок');
+      state.notes.unshift(note);
+    });
+    json(res, 201, { note }); return;
   }
   if (method === 'DELETE' && pathname.startsWith('/api/notes/')) {
     const id = pathname.slice('/api/notes/'.length);
     if (!validId(id)) throw new HttpError(400, 'Неверный идентификатор');
-    const state = readState(); const count = state.notes.length;
-    state.notes = state.notes.filter(note => note.id !== id);
-    if (count === state.notes.length) throw new HttpError(404, 'Заметка не найдена');
-    saveAtomic(statePath, state); json(res, 200, { ok: true }); return;
+    await mutateState(state => {
+      const count = state.notes.length;
+      state.notes = state.notes.filter(note => note.id !== id);
+      if (count === state.notes.length) throw new HttpError(404, 'Заметка не найдена');
+    });
+    json(res, 200, { ok: true }); return;
   }
   if (method === 'POST' && pathname === '/api/tasks') {
-    const input = await bodyJson(req); const state = readState();
+    const input = await bodyJson(req);
     const task: Task = { id: randomUUID(), title: requiredText(input.title, 'Задача', 160), done: false, createdAt: new Date().toISOString() };
-    if (state.tasks.length >= 500) throw new HttpError(400, 'Достигнут лимит 500 задач');
-    state.tasks.unshift(task); saveAtomic(statePath, state); json(res, 201, { task }); return;
+    await mutateState(state => {
+      if (!database && state.tasks.length >= 500) throw new HttpError(400, 'Достигнут лимит 500 задач');
+      state.tasks.unshift(task);
+    });
+    json(res, 201, { task }); return;
   }
   if (pathname.startsWith('/api/tasks/') && (method === 'PATCH' || method === 'DELETE')) {
     const id = pathname.slice('/api/tasks/'.length);
     if (!validId(id)) throw new HttpError(400, 'Неверный идентификатор');
-    const state = readState(); const task = state.tasks.find(item => item.id === id);
-    if (!task) throw new HttpError(404, 'Задача не найдена');
-    if (method === 'DELETE') state.tasks = state.tasks.filter(item => item.id !== id);
-    else { const input = await bodyJson(req); if (typeof input.done !== 'boolean') throw new HttpError(400, 'Поле done должно быть boolean'); task.done = input.done; }
-    saveAtomic(statePath, state); json(res, 200, { ok: true }); return;
+    const input = method === 'PATCH' ? await bodyJson(req) : null;
+    await mutateState(state => {
+      const task = state.tasks.find(item => item.id === id);
+      if (!task) throw new HttpError(404, 'Задача не найдена');
+      if (method === 'DELETE') state.tasks = state.tasks.filter(item => item.id !== id);
+      else {
+        if (typeof input?.done !== 'boolean') throw new HttpError(400, 'Поле done должно быть boolean');
+        task.done = input.done;
+      }
+    });
+    json(res, 200, { ok: true }); return;
   }
   if (method === 'POST' && pathname === '/api/settings') {
     const input = await bodyJson(req); const current = readCloud();
@@ -191,8 +219,46 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
   if (method === 'POST' && pathname === '/api/chat/clear') {
     await bodyJson(req);
-    const state = readState(); state.messages = []; saveAtomic(statePath, state);
+    await mutateState(state => { state.messages = []; });
     json(res, 200, { messages: [] }); return;
+  }
+  if (method === 'POST' && pathname === '/api/knowledge') {
+    if (!database) throw new HttpError(409, 'Для базы знаний настройте PostgreSQL + pgvector');
+    const input = await bodyJson(req);
+    const content = requiredText(input.content, 'Знание', 12000);
+    const source = input.source === undefined ? 'manual' : requiredText(input.source, 'Источник', 100);
+    const metadata = input.metadata === undefined ? {} : input.metadata;
+    if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata) || JSON.stringify(metadata).length > 8000) {
+      throw new HttpError(400, 'metadata должен быть небольшим JSON-объектом');
+    }
+    let embedding: number[] | undefined;
+    if (input.embedding !== undefined) {
+      if (!Array.isArray(input.embedding) || input.embedding.length < 1 || input.embedding.length > 2000 ||
+          !input.embedding.every(value => typeof value === 'number' && Number.isFinite(value))) {
+        throw new HttpError(400, 'embedding должен содержать от 1 до 2000 конечных чисел');
+      }
+      embedding = input.embedding as number[];
+    }
+    const model = embedding ? requiredText(input.embeddingModel, 'Модель эмбеддингов', 150) : undefined;
+    const knowledge = await database.addKnowledge(content, source, metadata as Json, embedding, model);
+    json(res, 201, { knowledge }); return;
+  }
+  if (method === 'POST' && pathname === '/api/knowledge/search') {
+    if (!database) throw new HttpError(409, 'Для поиска знаний настройте PostgreSQL + pgvector');
+    const input = await bodyJson(req);
+    let embedding: number[] | undefined;
+    if (input.embedding !== undefined) {
+      if (!Array.isArray(input.embedding) || input.embedding.length < 1 || input.embedding.length > 2000 ||
+          !input.embedding.every(value => typeof value === 'number' && Number.isFinite(value))) {
+        throw new HttpError(400, 'Некорректный поисковый вектор');
+      }
+      embedding = input.embedding as number[];
+    }
+    const query = embedding ? '' : requiredText(input.query, 'Поисковый запрос', 500);
+    const limit = input.limit === undefined ? 25 : input.limit;
+    if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 100) throw new HttpError(400, 'Лимит: 1–100');
+    const items = await database.searchKnowledge(query, embedding, limit as number);
+    json(res, 200, { items }); return;
   }
   if (method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
     staticFile(res, join(root, 'web', 'index.html'), 'text/html; charset=utf-8'); return;
