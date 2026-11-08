@@ -79,6 +79,16 @@ try {
     const text=await evaluate("document.getElementById('city-load-status')?.textContent || ''");
     return text.includes('Полный архив') ? text : null;
   },'full city archive');
+  // Select a real city district, then resolve full text through the local API.
+  await evaluate("document.querySelector('.city-district-button').click(); true");
+  await until(() => evaluate("!!document.querySelector('.city-full-button')"), 'selected building');
+  await evaluate("document.querySelector('.city-full-button').click(); true");
+  await until(async () => {
+    const text = await evaluate("document.querySelector('.city-full-button')?.textContent || ''");
+    return text === 'Полный текст загружен';
+  }, 'read original record');
+  const fullText = await evaluate("document.querySelector('.city-detail-body')?.textContent || ''");
+  assert.match(fullText, /Реальная запись для проверки трёхмерного города/);
   const state=await evaluate("({is3D:!!city?.is3D,loaded:!!cityLoaded,count:document.getElementById('city-count')?.textContent,width:document.getElementById('city-canvas')?.width,height:document.getElementById('city-canvas')?.height,glError:document.getElementById('city-canvas')?.getContext('webgl2')?.getError(),status:document.getElementById('city-load-status')?.textContent})");
   assert.equal(state.loaded,true,JSON.stringify(state));
   assert.equal(state.is3D,true,'WebGL2 city not active: '+JSON.stringify(state)+' / '+chromeError);
