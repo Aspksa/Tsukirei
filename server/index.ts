@@ -19,7 +19,8 @@ const port = Number(process.env.PORT ?? 3000);
 let cloudBusy = false;
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
 }
 function newState(): State { return { notes: [], tasks: [], messages: [] }; }
 function readState(): State {
