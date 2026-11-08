@@ -86,6 +86,32 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
     const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
   assert.equal(vector.status, 200);
   assert.equal(vector.data.items[0].id, fact.data.knowledge.id);
+  async function readyWorld(total) {
+    for (let retry=0;retry<100;retry++) {
+      const state=await api(first.base,'/api/city/world/status');
+      assert.equal(state.status,200);
+      if(state.data.state==='error')throw new Error(state.data.error);
+      if(state.data.ready && state.data.index.total===total)return state.data;
+      await new Promise(resolve=>setTimeout(resolve,80));
+    }
+    throw new Error('Индекс города PostgreSQL не обновился');
+  }
+  const indexed = await readyWorld(2);
+  assert.equal(indexed.index.total,2);
+  const district=indexed.index.districts[0];
+  const tile=await api(first.base,
+    '/api/city/world/tiles?x='+district.x+'&y='+district.y+'&radius=800&limit=50');
+  assert.equal(tile.status,200,JSON.stringify(tile.data));
+  assert.ok(tile.data.buildings.some(b=>b.sourceId===legacy.notes[0].id));
+  const match=await api(first.base,'/api/city/world/search?q='+encodeURIComponent('Tsukirei'));
+  assert.equal(match.status,200);
+  assert.ok(match.data.items.some(b=>b.sourceId===undefined&&b.kind==='knowledge'));
+  const created=await api(first.base,'/api/notes','POST',{title:'Знание в новом районе'});
+  assert.equal(created.status,201);
+  await readyWorld(3);
+  const deleted=await api(first.base,'/api/notes/'+created.data.note.id,'DELETE');
+  assert.equal(deleted.status,200);
+  await readyWorld(2);
   const bad = await api(first.base, '/api/knowledge', 'POST', { content: 'invalid', embedding: [Infinity, NaN] });
   assert.equal(bad.status, 400);
   first.child.kill();
