@@ -74,7 +74,16 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   assert.equal(pagedKnowledge.status, 200, JSON.stringify(pagedKnowledge.data));
   assert.equal(pagedKnowledge.data.total >= 1, true);
   assert.ok(pagedKnowledge.data.items.some(item => item.id === fact.data.knowledge.id));
-  const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
+  const originalNote = await api(first.base, '/api/city/entry?kind=notes&id=' + legacy.notes[0].id);
+  assert.equal(originalNote.status, 200, JSON.stringify(originalNote.data));
+  assert.equal(originalNote.data.entry.body, 'данные не теряются');
+  const originalKnowledge = await api(first.base, '/api/city/entry?kind=knowledge&id=' + fact.data.knowledge.id);
+  assert.equal(originalKnowledge.status, 200, JSON.stringify(originalKnowledge.data));
+  assert.equal(originalKnowledge.data.entry.content, 'Tsukirei сохраняет знания о памяти');
+  const smallPreview = await api(first.base, '/api/city/archive?kind=notes&offset=0&limit=1&compact=1');
+  assert.equal(smallPreview.status, 200);
+  assert.equal(smallPreview.data.items[0].fullLength, legacy.notes[0].title.length + legacy.notes[0].body.length);
+    const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
   assert.equal(vector.status, 200);
   assert.equal(vector.data.items[0].id, fact.data.knowledge.id);
   const bad = await api(first.base, '/api/knowledge', 'POST', { content: 'invalid', embedding: [Infinity, NaN] });
