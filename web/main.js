@@ -2,7 +2,7 @@
 
 const pages = { home: 'Обзор', memory: 'Память', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
-const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' } };
+const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
 let toastTimer;
 
@@ -69,7 +69,7 @@ function renderStatus() {
   el('status-text').textContent = settings.configured ? 'Cloud.ru настроен' : 'Локальная система';
   el('connection-pill').textContent = settings.configured ? 'ИИ настроен' : 'Локальная';
   el('connection-heading').textContent = settings.configured ? 'Всё готово для диалога' : 'Цукирэй на связи';
-  el('connection-detail').textContent = settings.configured ? 'Облачная модель включится только по вашему запросу.' : 'Заметки и задачи доступны. Для ИИ-чата подключите Cloud.ru.';
+  el('connection-detail').textContent = (settings.configured ? 'Облачная модель включится только по вашему запросу.' : 'Заметки и задачи доступны. Для ИИ-чата подключите Cloud.ru.') + (viewState.database.connected ? ' · Память: PostgreSQL + pgvector.' : ' · Хранилище: старый JSON.');
   el('cloud-status').textContent = settings.configured ? 'Настроено · запросы только вручную' : (settings.hasKey ? 'Ключ сохранён · выберите модель' : 'Не подключено');
   el('chat-provider').textContent = settings.configured ? 'Cloud.ru · ' + settings.model : 'Cloud.ru · не подключён';
   if (document.activeElement !== el('cloud-model')) el('cloud-model').value = settings.model || '';
