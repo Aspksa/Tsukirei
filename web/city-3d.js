@@ -136,7 +136,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  let spatial=root.TsukireiSpatial?.build(scene.buildings)||null;
  let visibleBuildings=[];
  let lastVisibleCamera=null;
- const maxGpuBuildings=6500;
+ let maxGpuBuildings=3500;
  function selectVisible(force=false){
   if(!spatial)return;
   const current={x:target[0],y:target[2],distance};
@@ -416,6 +416,14 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   }
   return matches;
  }
+ function setQuality(next){
+  const requested=Number(next);
+  if(!Number.isInteger(requested)||![1500,3500,6500].includes(requested))return;
+  maxGpuBuildings=requested;
+  lastVisibleCamera=null;
+  selectVisible(true);
+  schedule();
+ }
  function focus(id){
   const record=scene.buildings.find(b=>b.id===id);
   if(!record)return false;
@@ -424,7 +432,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   distance=Math.max(140,Math.min(380,distance));
   renderDetail();schedule();return true;
  }
- return{update,activate,search,focus,is3D:true,
+ return{update,activate,search,focus,setQuality,is3D:true,
   gpuStats(){return{visible:visibleBuildings.length,total:scene.buildings.length,max:maxGpuBuildings}}};
 }
 root.TsukireiCity3D=Object.freeze({startCity});
