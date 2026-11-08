@@ -14,8 +14,10 @@ set "TSUKIREI_EXIT=%ERRORLEVEL%"
 if not "%TSUKIREI_EXIT%"=="0" (
     echo.
     echo [Tsukirei] Launcher stopped with code %TSUKIREI_EXIT%.
-    echo Press any key to close this window.
-    pause >nul
+    if /I not "%CI%"=="true" (
+        echo Press any key to close this window.
+        pause >nul
+    )
 )
 exit /b %TSUKIREI_EXIT%
 ### TSUKIREI_PS_BEGIN ###
@@ -105,6 +107,157 @@ function Get-Sha256([string]$path) {
     try { return ([BitConverter]::ToString($hash.ComputeHash($stream))).Replace('-', '') }
     finally { $stream.Dispose(); $hash.Dispose() }
 }
+function Ensure-PortablePostgres {
+    $data = Join-Path $root 'data'
+    $settings = Join-Path $data 'postgres-settings.json'
+    $managed = Join-Path $data 'portable-postgres.json'
+    if ($env:TSUKIREI_DATABASE_URL -or $env:DATABASE_URL) {
+        Say 'Использую PostgreSQL из переменной окружения.'
+        return
+    }
+    if ((Test-Path -LiteralPath $settings) -and -not (Test-Path -LiteralPath $managed)) {
+        Say 'Использую PostgreSQL из существующих настроек.'
+        return
+    }
+    if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+        throw 'Автоустановка PostgreSQL доступна только на Windows x64.'
+    }
+    New-Item -ItemType Directory -Path $data -Force | Out-Null
+    $exe = Join-Path $runtime 'pg0/pg0.exe'
+    $expected = 'da580cc8fd390ba01158bea192d6bb6d4b0f583abc468ced7f9c582370c34cb6'
+    if (-not (Test-Path -LiteralPath $exe -PathType Leaf) -or (Get-Sha256 $exe).ToLowerInvariant() -ne $expected) {
+        Say 'Загружаю переносимый PostgreSQL + pgvector...'
+        New-Item -ItemType Directory -Path (Split-Path -Parent $exe) -Force | Out-Null
+        $download = $exe + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri 'https://github.com/vectorize-io/pg0/releases/download/v0.16.1/pg0-windows-x86_64.exe' -OutFile $download -UseBasicParsing -TimeoutSec 240
+            if ((Get-Sha256 $download).ToLowerInvariant() -ne $expected) { throw 'SHA-256 PostgreSQL не совпала.' }
+            Move-Item -LiteralPath $download -Destination $exe -Force
+        } finally {
+            if (Test-Path -LiteralPath $download) { Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    if (Test-Path -LiteralPath $managed) {
+        $config = Get-Content -LiteralPath $managed -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($config.version -ne 1 -or $config.password -notmatch '^[a-f0-9]{64}$' -or
+            $config.port -lt 1024 -or $config.port -gt 65535 -or
+            -not [IO.Path]::IsPathRooted([string]$config.store) -or
+            [string]$config.store -cnotmatch '^[\x20-\x7E]+$') {
+            throw 'Неверные настройки переносимой PostgreSQL. Не удаляйте данные!'
+        }
+        $store = [string]$config.store
+        if (-not (Test-Path -LiteralPath $store -PathType Container)) {
+            throw ('Не найден диск с базой данных: ' + $store + '. Новую базу автоматически не создаю.')
+        }
+    } else {
+        $digest = [Security.Cryptography.SHA256]::Create()
+        try {
+            $id = ([BitConverter]::ToString($digest.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant())))).Replace('-', '').Substring(0, 16)
+        } finally { $digest.Dispose() }
+        $store = $null
+        $parent = $root
+        while ($parent) {
+            if ($parent -cmatch '^[\x20-\x7E]+$') {
+                $candidate = Join-Path $parent ('Tsukirei-Postgres-' + $id)
+                try {
+                    New-Item -ItemType Directory -Path $candidate -Force -ErrorAction Stop | Out-Null
+                    $attrs = (Get-Item -LiteralPath $candidate -Force).Attributes
+                    if (($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Нельзя использовать junction' }
+                    $store = $candidate
+                    break
+                } catch { Say ('Не удалось использовать ' + $candidate) }
+            }
+            $up = Split-Path -Path $parent -Parent
+            if (-not $up -or $up -eq $parent) { break }
+            $parent = $up
+        }
+        if (-not $store) { throw 'Нужен доступный для записи латинский путь на диске с проектом.' }
+        $port = $null
+        foreach ($p in 55432..55480) {
+            if (-not (Test-Port $p)) { $port = $p; break }
+        }
+        if (-not $port) { throw 'Порты PostgreSQL 55432–55480 заняты.' }
+        $bytes = New-Object byte[] 32
+        $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+        $config = [pscustomobject]@{
+            version = 1
+            store = $store
+            port = $port
+            password = ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
+        }
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($managed, ($config | ConvertTo-Json -Compress), $utf8)
+    }
+    $env:PG0_HOME = Join-Path $store 'pg0-home'
+    $env:PG0_INSTALLATION_DIR = Join-Path $store 'pg0-installation'
+    $env:TEMP = Join-Path $store 'temp'
+    $env:TMP = $env:TEMP
+    foreach ($folder in @($env:PG0_HOME, $env:PG0_INSTALLATION_DIR, $env:TEMP)) {
+        New-Item -ItemType Directory -Path $folder -Force | Out-Null
+    }
+    $db = Join-Path $store 'database'
+    if (-not (Test-Path -LiteralPath (Join-Path $db 'PG_VERSION'))) {
+        # initdb on Windows needs WRITE_DAC/Full Control for the current SID.
+        # Grant it only to the current account, never Everyone and never system-wide.
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $access = '*' + $sid + ':(OI)(CI)F'
+        & icacls.exe $store '/grant:r' $access '/T' '/C' | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Не удалось установить права текущего пользователя на каталог PostgreSQL. Проверьте разрешения NTFS.'
+        }
+    }
+    $script:PortablePG0 = $exe
+    if (Test-Port ([int]$config.port)) {
+        $info = (& $exe info --name tsukirei -o json 2>$null | Out-String)
+        if ($LASTEXITCODE -ne 0 -or $info -notmatch '"running"\s*:\s*true') {
+            throw 'Порт PostgreSQL занят другой программой. Не подключаюсь к неизвестной базе.'
+        }
+    } else {
+        Say ('Инициализирую PostgreSQL + pgvector: ' + $store)
+        # Do not pipe pg0 stdout into Out-String: postgres workers inherit pipe
+        # handles and keep the PowerShell pipeline open indefinitely on Windows.
+        $pgOut = Join-Path $logs ('pg0-' + $stamp + '-out.log')
+        $pgErr = Join-Path $logs ('pg0-' + $stamp + '-err.log')
+        $argsPg = 'start --name tsukirei --port ' + [string]$config.port +
+            ' --data-dir "' + $db + '" --username tsukirei --password ' + [string]$config.password +
+            ' --database tsukirei --config listen_addresses=127.0.0.1 --config shared_buffers=64MB --config work_mem=8MB'
+        $pgProcess = Start-Process -FilePath $exe -ArgumentList $argsPg -NoNewWindow -PassThru -RedirectStandardOutput $pgOut -RedirectStandardError $pgErr
+        try {
+            if (-not $pgProcess.WaitForExit(120000)) {
+                try { $pgProcess.Kill() } catch { }
+                throw 'Программа запуска PostgreSQL не завершилась за 120 секунд. Проверьте logs/pg0-*-err.log.'
+            }
+            # pg0 may emit a non-zero status after creating an operational
+            # PostgreSQL instance. Confirm the instance itself before deciding.
+            $pgStatusText = (& $exe info --name tsukirei -o json 2>$null | Out-String)
+            $pgInfoOk = ($LASTEXITCODE -eq 0 -and $pgStatusText -match '"running"\s*:\s*true')
+            if (-not $pgInfoOk -or -not (Test-Port ([int]$config.port))) {
+                $pgText = ((Get-ExitText $pgErr) + (Get-ExitText $pgOut)).Replace([string]$config.password, '[скрыто]')
+                throw ('PostgreSQL не запустился: ' + $pgText)
+            }
+            if ($pgProcess.ExitCode -ne 0) {
+                Say 'pg0 вывел предупреждения, но PostgreSQL проверен и работает.'
+            }
+        } finally {
+            $pgProcess.Dispose()
+            # pg0 prints a connection URI containing the generated password.
+            # Keep it only in the ignored settings file, not in the logs.
+            Remove-Item -LiteralPath $pgOut, $pgErr -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if (-not (Test-Port ([int]$config.port))) { throw 'Сервер PostgreSQL не отвечает.' }
+    $script:PortablePG0Started = $true
+    $url = 'postgresql://tsukirei:' + $config.password + '@127.0.0.1:' + $config.port + '/tsukirei'
+    $env:TSUKIREI_DATABASE_URL = $url
+    if (-not (Test-Path -LiteralPath $settings)) {
+        $utf8 = New-Object System.Text.UTF8Encoding($false)
+        [IO.File]::WriteAllText($settings, (@{ url = $url } | ConvertTo-Json -Compress), $utf8)
+    }
+    Say ('PostgreSQL готов. Папка данных на том же диске: ' + $store)
+}
 function Test-Port([int]$number) {
     $tcp = New-Object Net.Sockets.TcpClient
     try {
@@ -133,6 +286,7 @@ if ($diagnose) {
     $node = Find-Node
     Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
+    Say "PostgreSQL: $(if (Test-Path -LiteralPath (Join-Path $root 'data/portable-postgres.json')) { 'переносимый настроен' } elseif (Test-Path -LiteralPath (Join-Path $root 'data/postgres-settings.json')) { 'внешний сервер' } else { 'автоустановка при запуске' })"
     Say 'Диагностика завершена.'
     exit 0
 }
@@ -145,6 +299,8 @@ if (-not $app) {
 
 $mutex = $null
 $process = $null
+$script:PortablePG0 = $null
+$script:PortablePG0Started = $false
 try {
     New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -209,6 +365,8 @@ try {
         Set-Content -LiteralPath $installMarker -Value $depHash -Encoding Ascii
     }
 
+    Ensure-PortablePostgres
+
     $output = Join-Path $logs "$stamp-out.log"
     $errors = Join-Path $logs "$stamp-error.log"
     $args = '"' + $npmCli + '" run ' + $script
@@ -262,6 +420,9 @@ try {
     if ($process) {
         try { $process.Refresh(); if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch { }
         $process.Dispose()
+    }
+    if ($script:PortablePG0Started -and $script:PortablePG0) {
+        try { & $script:PortablePG0 stop --name tsukirei 2>$null | Out-Null } catch { }
     }
     if ($mutex) {
         try { $mutex.ReleaseMutex() } catch { }
