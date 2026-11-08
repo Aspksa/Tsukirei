@@ -106,6 +106,23 @@ export async function connectPostgres(dataDir: string) {
         });
       },
       // Bounded JSONB slices, not full history transfer. Read-only, no migration.
+      async cityEntry(kind: 'notes' | 'messages' | 'knowledge', id: string): Promise<Record<string, unknown> | null> {
+        if (kind === 'knowledge') {
+          const rows = await sql`SELECT id, content, source, metadata, created_at
+            FROM tsukirei_knowledge WHERE id = ${id}::uuid LIMIT 1`;
+          if (!rows.length) return null;
+          const item = rows[0];
+          return {
+            id: String(item.id), content: item.content, source: item.source,
+            metadata: item.metadata ?? {},
+            createdAt: item.created_at instanceof Date ? item.created_at.toISOString() : String(item.created_at)
+          };
+        }
+        const rows = await sql`SELECT element AS item
+          FROM tsukirei_state, jsonb_array_elements(value -> ${kind}) AS element
+          WHERE element ->> 'id' = ${id} LIMIT 1`;
+        return rows.length ? rows[0].item as Record<string, unknown> : null;
+      },
       async pageCity(kind: 'notes' | 'messages' | 'knowledge', offset: number, limit: number) {
         if (kind === 'knowledge') {
           const totals = await sql`SELECT count(*)::int AS total FROM tsukirei_knowledge`;
