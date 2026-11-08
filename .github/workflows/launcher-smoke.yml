@@ -1,0 +1,27 @@
+name: Windows BAT launcher smoke test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  launcher:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check launcher help and diagnostics
+        shell: pwsh
+        run: |
+          & .\Tsukirei.bat --help
+          if ($LASTEXITCODE -ne 0) { throw "Help failed: $LASTEXITCODE" }
+          & .\Tsukirei.bat --diagnose
+          if ($LASTEXITCODE -ne 0) { throw "Diagnostics failed: $LASTEXITCODE" }
+      - name: Check Cyrillic and special-character path
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'Цукирэй & тест ! ^ ( ) %'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item -LiteralPath '.\Tsukirei.bat' -Destination (Join-Path $dir 'Tsukirei.bat')
+          & (Join-Path $dir 'Tsukirei.bat') --diagnose
+          if ($LASTEXITCODE -ne 0) { throw "Special path test failed: $LASTEXITCODE" }
