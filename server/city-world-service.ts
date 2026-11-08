@@ -10,7 +10,8 @@ export class CityWorldService {
   private progress=0;
   private total=0;
   private error:string|null=null;
-  constructor(private readonly page:PageFn){}
+  private readonly page:PageFn;
+  constructor(page:PageFn){this.page=page;}
   invalidate(){
     this.generation++;
     this.index=null;
