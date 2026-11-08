@@ -125,7 +125,7 @@ if ($diagnose) {
     Say "Windows PowerShell: $($PSVersionTable.PSVersion)"
     Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
     $node = Find-Node
-    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при добавлении приложения установится автоматически' })"
+    Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
     Say 'Диагностика завершена.'
     exit 0
@@ -171,7 +171,15 @@ try {
         }
         $port = $candidate
     }
-    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите TSUKIREI_PORT." }
+    if (-not $env:TSUKIREI_PORT -and (Test-Port $port)) {
+        $originalPort = $port
+        foreach ($candidate in 3001..3020) {
+            if (-not (Test-Port $candidate)) { $port = $candidate; break }
+        }
+        if ($port -eq $originalPort) { throw 'Все порты 3000–3020 заняты. Укажите свободный TSUKIREI_PORT.' }
+        Say "Порт $originalPort занят. Использую свободный порт $port."
+    }
+    if (Test-Port $port) { throw "Порт $port занят. Закройте другой сервер или укажите свободный TSUKIREI_PORT." }
     $env:PORT = "$port"
     $env:HOST = '127.0.0.1'
     $env:npm_config_cache = Join-Path $runtime 'npm-cache'
@@ -212,8 +220,11 @@ try {
             try {
                 $response = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
                 if ([int]$response.StatusCode -ge 200 -and [int]$response.StatusCode -lt 400) {
-                    $ready = $true
-                    break
+                    $health = Invoke-RestMethod -Uri ($url + 'api/health') -TimeoutSec 3
+                    if ($health.ok -eq $true -and $health.name -eq 'Tsukirei') {
+                        $ready = $true
+                        break
+                    }
                 }
             } catch { }
         }
