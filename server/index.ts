@@ -330,6 +330,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/city-model.js') {
     staticFile(res, join(root, 'web', 'city-model.js'), 'text/javascript; charset=utf-8'); return;
   }
+  if (method === 'GET' && pathname === '/city-spatial.js') {
+    staticFile(res, join(root, 'web', 'city-spatial.js'), 'text/javascript; charset=utf-8'); return;
+  }
   if (method === 'GET' && pathname === '/city-3d.js') {
     staticFile(res, join(root, 'web', 'city-3d.js'), 'text/javascript; charset=utf-8'); return;
   }

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/styles.css">
   <script src="/city-model.js" defer></script>
   <script src="/city.js" defer></script>
+  <script src="/city-spatial.js" defer></script>
   <script src="/city-3d.js" defer></script>
   <script src="/main.js" defer></script>
 </head>
@@ -127,6 +128,13 @@
               <div class="glass-panel city-overview">
                 <div class="panel-kicker">СОСТОЯНИЕ ГОРОДА</div>
                 <strong id="city-stats">0 районов · 0 зданий · 0 связей</strong>
+                <div class="city-visible-hud" id="city-visible-status" aria-live="polite">3D: 0 / 0</div>
+                <label class="city-quality-label" for="city-quality">Детализация видеокарты</label>
+                <select id="city-quality" class="city-quality" aria-label="Лимит одновременно рисуемых зданий">
+                  <option value="1500">Экономная · до 1 500</option>
+                  <option value="3500" selected>Сбалансированная · до 3 500</option>
+                  <option value="6500">Максимальная · до 6 500</option>
+                </select>
                 <p>Высота здания зависит от объёма текста. Районы группируются по ключевым словам, дороги показывают общие слова между районами.</p>
                 <div class="city-view-controls">
                   <button class="ghost-button" id="city-fit" type="button">Показать весь город</button>

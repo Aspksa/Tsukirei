@@ -57,3 +57,9 @@
 .city-search-result small{font-size:10px;color:#99909a}
 .city-search-result:hover{background:#30261d;border-color:#a27b4c}
 .city-search-hint{font-size:11px;color:#88808c;line-height:1.5}
+
+/* Memory-city GPU controls stay in the separate inspector, never over the 3D scene. */
+.city-visible-hud{font-size:12px;color:#d2b484;margin:9px 0;line-height:1.5}
+.city-quality-label{display:block;font-size:11px;color:#9f9290;margin:13px 0 7px}
+.city-quality{width:100%;font:inherit;font-size:12px;border:1px solid #443930;border-radius:10px;color:#e2caa4;background:#17171d;padding:10px}
+.city-quality:focus-visible{outline:2px solid #d4aa70;outline-offset:2px}

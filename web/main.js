@@ -291,6 +291,9 @@ async function loadCityArchive() {
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
 el('city-reload').addEventListener('click', staleCity);
+el('city-quality').addEventListener('change', () => {
+  city?.setQuality?.(Number(el('city-quality').value));
+});
 el('city-search-input').addEventListener('input', () => {
   clearTimeout(citySearchDelay);
   citySearchDelay = setTimeout(renderCitySearch, 180);
