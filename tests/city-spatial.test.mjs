@@ -16,7 +16,7 @@ test('empty world and negative coordinates', () => {
   assert.equal(empty.displayedCount,0);
   const items=[{id:'minus',x:-480,y:-480},{id:'plus',x:3000,y:3000}];
   const result=select(build(items),{x:-480,y:-480,distance:500},1500);
-  assert.deepEqual(result.items.map(x=>x.id),['minus']);
+  assert.equal([...result.items.map(x=>x.id)].join(','),'minus');
   assert.equal(result.totalCount,2);
 });
 
@@ -34,7 +34,8 @@ test('visible buildings are capped and nearest entries win', () => {
   const radiusSq=a.radius*a.radius;
   assert.ok(a.items.every(p=>(p.x-query.x)**2+(p.y-query.y)**2<=radiusSq));
   const farthest=Math.max(...a.items.map(p=>(p.x-query.x)**2+(p.y-query.y)**2));
-  const nearestOutside=data.filter(p=>!new Set(a.items).has(p))
+  const selected = new Set(a.items);
+  const nearestOutside=data.filter(p=>!selected.has(p))
     .map(p=>(p.x-query.x)**2+(p.y-query.y)**2)
     .filter(x=>x<=radiusSq);
   assert.ok(nearestOutside.every(x=>x>=farthest));
