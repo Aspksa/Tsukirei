@@ -68,6 +68,12 @@ function go(page) {
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
   city?.activate(page === 'city');
+  if (page !== 'city' && cityLoading) {
+    // Stop the incremental import when the city is no longer visible.
+    cityLoadGeneration++;
+    cityLoading = false;
+    cityArchive = null;
+  }
   if (page === 'city' && !cityLoaded && !cityLoading) loadCityArchive();
   window.location.hash = page;
 }
@@ -186,47 +192,71 @@ async function loadCityArchive() {
   if (cityLoading || !city) return;
   const generation = ++cityLoadGeneration;
   cityLoading = true;
+  cityLoaded = false;
   cityStatus('Читаю локальный архив…');
+  // Compact entries: one preview and original text length per record.
+  // Full text remains in PostgreSQL/JSON and is requested on demand.
   const archive = { notes: [], messages: [], knowledge: [] };
-  let loaded = 0, total = 0;
+  cityArchive = archive;
+  let loaded = 0, total = 0, redrawAt = 400;
   try {
+    let stateRevision = null;
     for (const kind of ['notes', 'messages', 'knowledge']) {
       let offset = 0, revision = null, more = true;
       while (more) {
-        const page = await api('/api/city/archive?kind=' + kind + '&offset=' + offset + '&limit=200');
+        const page = await api('/api/city/archive?compact=1&kind=' + kind +
+          '&offset=' + offset + '&limit=200');
         if (generation !== cityLoadGeneration) return;
         if (!Array.isArray(page.items) || !Number.isSafeInteger(page.total) ||
-            page.items.length > 200 || page.offset !== offset || page.kind !== kind) {
+            page.total < 0 || page.items.length > 200 ||
+            page.offset !== offset || page.kind !== kind) {
           throw new Error('Сервер вернул некорректную страницу архива.');
         }
-        if (revision !== null && page.revision !== revision)
+        if (revision !== null && page.revision !== revision) {
           throw new Error('Архив изменился во время чтения. Нажмите «Обновить город».');
+        }
+        if (kind !== 'knowledge' && stateRevision !== null && page.revision !== stateRevision) {
+          throw new Error('Архив изменился между загрузкой заметок и сообщений.');
+        }
         revision = page.revision;
+        if (kind === 'notes' && page.revision !== null) stateRevision = page.revision;
         archive[kind].push(...page.items);
         loaded += page.items.length;
         if (offset === 0) total += page.total;
         offset += page.items.length;
         more = Boolean(page.hasMore);
-        cityStatus('Загружено ' + loaded.toLocaleString('ru-RU') + ' из ' +
-          total.toLocaleString('ru-RU') + ' записей…');
-        if (more && !page.items.length) throw new Error('Сервер не продвинул позицию архива.');
+        cityStatus('Читаю память: ' + loaded.toLocaleString('ru-RU') +
+          ' / ' + total.toLocaleString('ru-RU') + ' записей…');
+        if (more && page.items.length === 0) {
+          throw new Error('Сервер не продвинул позицию архива.');
+        }
+        // Logarithmic drawing checkpoints: 400, 800, 1600, 3200 ...
+        // This is much cheaper than rebuilding the whole 3D scene after every page.
+        if (loaded >= redrawAt && city && window.location.hash === '#city') {
+          city.update(archive);
+          redrawAt *= 2;
+          await new Promise(resolve => requestAnimationFrame(resolve));
+          if (generation !== cityLoadGeneration) return;
+        }
       }
     }
     if (generation !== cityLoadGeneration) return;
-    cityArchive = archive;
     cityLoaded = true;
-    city.update(cityArchive);
-    const count = cityArchive.notes.length + cityArchive.messages.length + cityArchive.knowledge.length;
-    cityStatus('Полный архив: ' + count.toLocaleString('ru-RU') + ' записей · ' +
-      (city.is3D ? 'WebGL 3D' : 'Canvas 2D'));
+    city.update(archive);
+    const count = archive.notes.length + archive.messages.length + archive.knowledge.length;
+    cityStatus('Полный архив: ' + count.toLocaleString('ru-RU') +
+      ' записей · ' + (city.is3D ? 'WebGL 3D' : 'Canvas 2D') +
+      ' · превью сохранены локально');
   } catch (error) {
     if (generation !== cityLoadGeneration) return;
+    cityLoaded = false;
     cityStatus('Ошибка загрузки: ' + (error.message || 'неизвестная'), true);
     notify('Не удалось загрузить полный архив города', true);
   } finally {
     if (generation === cityLoadGeneration) cityLoading = false;
   }
 }
+
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
 el('city-reload').addEventListener('click', staleCity);
@@ -330,6 +360,32 @@ const cityConfig = {
   canvas: el('city-canvas'),
   detail: el('city-detail'),
   districtsList: el('city-district-list'),
+  async onInspect(record, container, button) {
+    const kind = record.kind === 'note' ? 'notes'
+      : record.kind === 'chat' ? 'messages' : 'knowledge';
+    const selected = container.dataset.selectedRecord;
+    button.disabled = true;
+    button.textContent = 'Читаю исходную запись…';
+    try {
+      const result = await api('/api/city/entry?kind=' + kind +
+        '&id=' + encodeURIComponent(record.sourceId));
+      if (container.dataset.selectedRecord !== selected) return;
+      const entry = result.entry;
+      const content = record.kind === 'note' ? ((entry.title || '') + '\n\n' + (entry.body || ''))
+        : entry.content;
+      const field = container.querySelector('.city-detail-body');
+      if (field) {
+        field.textContent = String(content || '');
+        field.classList.add('city-full-text');
+      }
+      button.textContent = 'Полный текст загружен';
+    } catch (error) {
+      if (container.dataset.selectedRecord !== selected) return;
+      button.textContent = 'Повторить чтение';
+      button.disabled = false;
+      notify(error.message || 'Не удалось прочитать запись', true);
+    }
+  },
   onNavigate(record) {
     if (record.kind === 'note') {
       go('memory');
