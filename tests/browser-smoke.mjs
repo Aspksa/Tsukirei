@@ -95,6 +95,13 @@ try {
   }, 'read original record');
   const fullText = await evaluate("document.querySelector('.city-detail-body')?.textContent || ''");
   assert.match(fullText, /Реальная запись для проверки трёхмерного города/);
+  const cap = await evaluate("city.gpuStats()");
+  assert.equal(cap.max,3500);
+  assert.equal(cap.total,1);
+  assert.equal(cap.visible,1);
+  await evaluate("document.querySelector('#city-quality').value='1500';document.querySelector('#city-quality').dispatchEvent(new Event('change'));true");
+  const economy = await evaluate("city.gpuStats()");
+  assert.equal(economy.max,1500);
   const state=await evaluate("({is3D:!!city?.is3D,loaded:!!cityLoaded,count:document.getElementById('city-count')?.textContent,width:document.getElementById('city-canvas')?.width,height:document.getElementById('city-canvas')?.height,glError:document.getElementById('city-canvas')?.getContext('webgl2')?.getError(),status:document.getElementById('city-load-status')?.textContent})");
   assert.equal(state.loaded,true,JSON.stringify(state));
   assert.equal(state.is3D,true,'WebGL2 city not active: '+JSON.stringify(state)+' / '+chromeError);
