@@ -11,6 +11,11 @@ let cityLoadGeneration = 0;
 let cityLoading = false;
 let cityLoaded = false;
 let citySearchDelay;
+let indexedWorld=null;
+let indexedTilesSerial=0;
+let indexedCameraTimer=null;
+let indexedFocus=null;
+let searchSerial=0;
 
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
@@ -74,6 +79,8 @@ function go(page) {
     cityLoadGeneration++;
     cityLoading = false;
     cityArchive = null;
+    indexedWorld = null;
+    indexedTilesSerial++;
   }
   if (page === 'city' && !cityLoaded && !cityLoading) loadCityArchive();
   window.location.hash = page;
@@ -177,29 +184,46 @@ function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus()
 function renderCitySearch() {
   const results = el('city-search-results');
   const query = el('city-search-input').value.trim();
+  const serial = ++searchSerial;
   results.replaceChildren();
   if (query.length < 2) {
     if (query) results.append(escapeNotNeeded('p', 'city-search-hint', 'Введите минимум 2 символа.'));
     return;
   }
-  const matches = city?.search?.(query, 14) || [];
-  if (!matches.length) {
-    results.append(escapeNotNeeded('p', 'city-search-hint', cityLoading ?
-      'Записи ещё загружаются…' : 'Совпадений в городе нет.'));
-    return;
+  function display(matches) {
+    if (serial !== searchSerial) return;
+    results.replaceChildren();
+    if (!matches.length) {
+      results.append(escapeNotNeeded('p', 'city-search-hint', cityLoading ?
+        'Записи ещё индексируются…' : 'Совпадений не найдено.'));
+      return;
+    }
+    for (const entry of matches) {
+      const button = escapeNotNeeded('button', 'city-search-result');
+      button.type = 'button';
+      button.setAttribute('role', 'listitem');
+      button.append(escapeNotNeeded('span', '', entry.title),
+        escapeNotNeeded('small', '', entry.districtName));
+      button.addEventListener('click', () => {
+        if (indexedWorld && city?.moveTo) {
+          indexedFocus = entry.id;
+          city.moveTo(entry.x, entry.y);
+          loadIndexedTiles(cityLoadGeneration);
+        } else city?.focus?.(entry.id);
+        el('city-canvas').focus();
+      });
+      results.append(button);
+    }
   }
-  for (const entry of matches) {
-    const button = escapeNotNeeded('button', 'city-search-result');
-    button.type = 'button';
-    button.setAttribute('role', 'listitem');
-    button.append(escapeNotNeeded('span', '', entry.title),
-      escapeNotNeeded('small', '', entry.districtName));
-    button.addEventListener('click', () => {
-      city?.focus?.(entry.id);
-      el('city-canvas').focus();
-    });
-    results.append(button);
-  }
+  if (indexedWorld) {
+    api('/api/city/world/search?q=' + encodeURIComponent(query))
+      .then(result => display(result.items || []))
+      .catch(error => {
+        if (serial === searchSerial) {
+          results.replaceChildren(escapeNotNeeded('p', 'city-search-hint', error.message));
+        }
+      });
+  } else display(city?.search?.(query,14) || []);
 }
 
 function cityStatus(message, isError = false) {
@@ -210,6 +234,9 @@ function cityStatus(message, isError = false) {
   }
 }
 function staleCity() {
+  indexedWorld=null;
+  indexedTilesSerial++;
+  clearTimeout(indexedCameraTimer);
   cityArchive = null;
   cityLoaded = false;
   cityLoadGeneration++;
@@ -217,6 +244,66 @@ function staleCity() {
   if (window.location.hash === '#city') loadCityArchive();
   else city?.update(viewState);
 }
+
+function onCityCameraChange() {
+  if (!indexedWorld || window.location.hash !== '#city') return;
+  clearTimeout(indexedCameraTimer);
+  indexedCameraTimer = setTimeout(() => loadIndexedTiles(cityLoadGeneration), 240);
+}
+async function loadIndexedTiles(generation) {
+  if (!indexedWorld || !city?.getViewport || generation !== cityLoadGeneration ||
+      window.location.hash !== '#city') return;
+  const ticket = ++indexedTilesSerial;
+  const view = city.getViewport();
+  const limit = Number(el('city-quality').value) || 3500;
+  const page = await api('/api/city/world/tiles?x=' + encodeURIComponent(view.x) +
+    '&y=' + encodeURIComponent(view.y) + '&radius=' + encodeURIComponent(view.radius) +
+    '&limit=' + limit);
+  if (ticket !== indexedTilesSerial || generation !== cityLoadGeneration || !indexedWorld) return;
+  if (!page.ready || !Array.isArray(page.buildings)) throw new Error('Индекс города обновляется. Нажмите «Обновить город».');
+  city.updateScene({
+    districts:indexedWorld.districts,
+    buildings:page.buildings,roads:[],
+    stats:{
+      districts:indexedWorld.districts.length,
+      buildings:indexedWorld.total,connections:0,
+      notes:0,dialogues:0,knowledge:0
+    }
+  },false);
+  const focused = indexedFocus;
+  indexedFocus = null;
+  if (focused) city.focus(focused);
+  cityStatus('Полный архив: ' + indexedWorld.total.toLocaleString('ru-RU') +
+    ' записей · видимая зона: ' + page.displayed.toLocaleString('ru-RU') +
+    ' объектов · серверный индекс · WebGL 3D');
+}
+async function loadIndexedCity(generation,first) {
+  let status=first;
+  while (!status.ready) {
+    if (generation!==cityLoadGeneration)return;
+    if (status.state==='error') throw new Error(status.error || 'Ошибка индекса памяти');
+    cityStatus('Сервер индексирует память: ' +
+      Number(status.progress||0).toLocaleString('ru-RU') + ' / ' +
+      Number(status.total||0).toLocaleString('ru-RU') + ' записей…');
+    await new Promise(resolve=>setTimeout(resolve,500));
+    if (generation!==cityLoadGeneration)return;
+    status=await api('/api/city/world/status');
+  }
+  if (generation!==cityLoadGeneration)return;
+  indexedWorld=status.index;
+  cityArchive={indexed:true};
+  cityLoaded=true;
+  // Global district anchors are cheap; only viewport buildings are sent to GPU.
+  city.updateScene({
+    districts:indexedWorld.districts,
+    buildings:[],roads:[],
+    stats:{districts:indexedWorld.districts.length,buildings:indexedWorld.total,
+      connections:0,notes:0,dialogues:0,knowledge:0}
+  },true);
+  await loadIndexedTiles(generation);
+  renderCitySearch();
+}
+
 async function loadCityArchive() {
   if (cityLoading || !city) return;
   const generation = ++cityLoadGeneration;
@@ -229,6 +316,15 @@ async function loadCityArchive() {
   cityArchive = archive;
   let loaded = 0, total = 0, redrawAt = 400;
   try {
+    // Native WebGL uses the server tile index; Canvas fallback retains the legacy reader.
+    if (city?.is3D && city?.updateScene) {
+      const status = await api('/api/city/world/status');
+      if (generation !== cityLoadGeneration) return;
+      if (status?.supported) {
+        await loadIndexedCity(generation,status);
+        return;
+      }
+    }
     let stateRevision = null;
     for (const kind of ['notes', 'messages', 'knowledge']) {
       let offset = 0, revision = null, more = true;
@@ -293,6 +389,7 @@ document.querySelectorAll('[data-page]').forEach(button => button.addEventListen
 el('city-reload').addEventListener('click', staleCity);
 el('city-quality').addEventListener('change', () => {
   city?.setQuality?.(Number(el('city-quality').value));
+  if (indexedWorld) loadIndexedTiles(cityLoadGeneration).catch(e => notify(e.message,true));
 });
 el('city-search-input').addEventListener('input', () => {
   clearTimeout(citySearchDelay);
@@ -424,6 +521,7 @@ const cityConfig = {
       notify(error.message || 'Не удалось прочитать запись', true);
     }
   },
+  onCameraChange: onCityCameraChange,
   onNavigate(record) {
     if (record.kind === 'note') {
       go('memory');
