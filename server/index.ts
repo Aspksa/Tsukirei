@@ -149,7 +149,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = req.headers.origin;
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.4.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.5.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
   if (method === 'GET' && pathname === '/api/city/entry') {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
