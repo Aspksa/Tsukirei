@@ -161,39 +161,46 @@ function Ensure-PortablePostgres {
         $config = [pscustomobject]@{ version = 1; port = $port; password = $password }
         $utf8 = New-Object System.Text.UTF8Encoding($false)
     }
-    # pg0's Windows subprocesses require ASCII paths. SUBST makes an ASCII alias
-    # while all physical data remain on the user's original drive (including M.2).
-    $drive = if ($config.PSObject.Properties.Name -contains 'drive' -and $config.drive) { [string]$config.drive } else { $null }
-    if (-not $drive) {
-        foreach ($letter in @('Z:', 'Y:', 'X:', 'W:', 'V:', 'U:', 'T:', 'S:', 'R:', 'Q:')) {
-            if (-not (Test-Path -LiteralPath ($letter + '\'))) { $drive = $letter; break }
-        }
-    }
-    if (-not $drive -or $drive -notmatch '^[A-Z]:$') { throw 'Нет свободной буквы диска для переносимой PostgreSQL.' }
-    $mapping = (& subst.exe | Out-String)
-    $expectedMapping = [regex]::Escape($drive + '\: => ' + $root)
-    if (Test-Path -LiteralPath ($drive + '\')) {
-        if ($mapping -notmatch $expectedMapping) {
-            throw "Диск $drive занят другим устройством. Освободите букву или обновите поле drive в data/portable-postgres.json при остановленном PostgreSQL."
-        }
+    # PostgreSQL initdb on Windows can fail with non-ASCII paths. Prefer an ASCII
+    # NTFS junction (not SUBST; chmod/initdb may reject SUBST drive paths).
+    $alias = $null
+    if ($root -cmatch '^[\x00-\x7F]+$') {
+        $alias = $root
     } else {
-        & subst.exe $drive $root | Out-Null
-        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath ($drive + '\'))) { throw 'Не удалось создать временную буквенную привязку для базы.' }
+        $digest = [Security.Cryptography.SHA256]::Create()
+        try { $hash = ([BitConverter]::ToString($digest.ComputeHash([Text.Encoding]::UTF8.GetBytes($root)))).Replace('-', '').Substring(0, 12) }
+        finally { $digest.Dispose() }
+        $bases = @([IO.Path]::GetPathRoot($root), [Environment]::GetFolderPath('CommonDocuments'), [Environment]::GetFolderPath('CommonApplicationData'))
+        foreach ($base in $bases) {
+            if (-not $base -or $base -cnotmatch '^[\x00-\x7F]+$') { continue }
+            $candidate = Join-Path $base ('Tsukirei_' + $hash)
+            try {
+                if (Test-Path -LiteralPath $candidate) {
+                    $item = Get-Item -LiteralPath $candidate -Force
+                    if ($item.LinkType -ne 'Junction' -or @($item.Target)[0].TrimEnd('\') -ine $root.TrimEnd('\')) {
+                        throw 'ASCII alias is owned by another directory'
+                    }
+                } else {
+                    New-Item -ItemType Junction -Path $candidate -Target $root -ErrorAction Stop | Out-Null
+                }
+                $alias = $candidate
+                break
+            } catch {
+                Say ('Не удалось создать NTFS-псевдоним в ' + $base + ': ' + $_.Exception.Message)
+            }
+        }
+        if (-not $alias) { throw 'Не удалось получить ASCII-путь для PostgreSQL. Проверьте NTFS и права на создание junction.' }
     }
-    $script:PortableDrive = $drive
-    $script:PortableExe = $exe
-    $config | Add-Member -MemberType NoteProperty -Name drive -Value $drive -Force
-    $utf8 = New-Object System.Text.UTF8Encoding($false)
-    [IO.File]::WriteAllText($portable, ($config | ConvertTo-Json -Compress), $utf8)
+    Say ('Путь базы для PostgreSQL: ' + $alias)
     $pgUrl = 'postgresql://tsukirei:' + $config.password + '@127.0.0.1:' + $config.port + '/tsukirei'
     $settingsObject = [pscustomobject]@{ url = $pgUrl }
     if (-not (Test-Path -LiteralPath $settings)) {
         $utf8 = New-Object System.Text.UTF8Encoding($false)
         [IO.File]::WriteAllText($settings, ($settingsObject | ConvertTo-Json -Compress), $utf8)
     }
-    $env:PG0_HOME = $drive + '\.runtime\pg0-home'
+    $env:PG0_HOME = Join-Path $alias '.runtime\pg0-home'
     New-Item -ItemType Directory -Path $env:PG0_HOME -Force | Out-Null
-    $dbDir = $drive + '\data\postgres'
+    $dbDir = Join-Path $alias 'data\postgres'
     Say ('Проверяю PostgreSQL + pgvector (порт ' + $config.port + ')...')
     # pg0 starts the server in the background; PG0_HOME keeps even its binaries on this drive.
     $outText = (& $exe start --name tsukirei --port ([int]$config.port) --data-dir $dbDir --username tsukirei --password ([string]$config.password) --database tsukirei --config 'listen_addresses=127.0.0.1' --config 'shared_buffers=64MB' --config 'maintenance_work_mem=128MB' --config 'work_mem=8MB' 2>&1 | Out-String)
@@ -244,7 +251,6 @@ if (-not $app) {
 
 $mutex = $null
 $process = $null
-$script:PortableDrive = $null
 $script:PortableExe = $null
 try {
     New-Item -ItemType Directory -Path $runtime, $logs -Force | Out-Null
@@ -368,9 +374,6 @@ try {
     }
     if ($script:PortableExe) {
         try { & $script:PortableExe stop --name tsukirei 2>$null | Out-Null } catch { }
-    }
-    if ($script:PortableDrive) {
-        try { & subst.exe $script:PortableDrive /D 2>$null | Out-Null } catch { }
     }
     if ($mutex) {
         try { $mutex.ReleaseMutex() } catch { }
