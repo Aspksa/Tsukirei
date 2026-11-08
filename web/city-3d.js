@@ -133,6 +133,27 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   roadVp:gl.getUniformLocation(roadProgram,'vp')
  };
  let scene=model.cityFromState({notes:[],messages:[],knowledge:[]});
+ let spatial=root.TsukireiSpatial?.build(scene.buildings)||null;
+ let visibleBuildings=[];
+ let lastVisibleCamera=null;
+ const maxGpuBuildings=6500;
+ function selectVisible(force=false){
+  if(!spatial)return;
+  const current={x:target[0],y:target[2],distance};
+  if(!force&&lastVisibleCamera){
+   const moved=Math.hypot(current.x-lastVisibleCamera.x,current.y-lastVisibleCamera.y);
+   if(moved<Math.max(120,current.distance*.12) &&
+      Math.abs(Math.log(current.distance/lastVisibleCamera.distance))<.16)return;
+  }
+  const result=root.TsukireiSpatial.select(spatial,current,maxGpuBuildings);
+  visibleBuildings=result.items;
+  lastVisibleCamera=current;
+  dirty=true;
+  const label=root.document.getElementById('city-visible-status');
+  if(label)label.textContent='3D: '+result.displayedCount.toLocaleString('ru-RU')+
+   ' / '+result.totalCount.toLocaleString('ru-RU')+
+   (result.limited?' · детали ограничены камерой':'')+' (лимит '+maxGpuBuildings+')';
+ }
  let buildings=null,plates=null,roads=null,grid=null;
  let active=false,lost=false,raf=0,dirty=true,w=1,h=1,dpr=1;
  let yaw=-.64,pitch=.89,distance=950,target=[0,0,0],selected=null;
@@ -158,25 +179,28 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  function rebuild(){
   dispose(gl,buildings);dispose(gl,plates);dispose(gl,roads);dispose(gl,grid);
   const all=[],ground=[],ways=[],lines=[];
-  scene.buildings.forEach((b,i)=>{
+  visibleBuildings.forEach((b,i)=>{
    const id=i+1,tint=colors[b.tint%colors.length];
    all.push(b.x,b.y,b.size,b.height,...tint,(id&255)/255,((id>>8)&255)/255,((id>>16)&255)/255);
   });
-  scene.districts.forEach(d=>ground.push(d.x,d.y,d.size,2,.13,.12,.14,0,0,0));
+  const displayedDistricts=new Set(visibleBuildings.map(b=>b.district));
+  scene.districts.filter(d=>displayedDistricts.has(d.key)).forEach(
+   d=>ground.push(d.x,d.y,d.size,2,.13,.12,.14,0,0,0)
+  );
   const link=(array,x1,y1,z1,x2,y2,z2,color)=>{
    array.push(x1,y1,z1,...color,x2,y2,z2,...color);
   };
-  const districtByKey=new Map(scene.districts.map(d=>[d.key,d]));
+  const districtByKey=new Map(scene.districts.filter(d=>displayedDistricts.has(d.key)).map(d=>[d.key,d]));
   for(const edge of scene.roads){
    const a=districtByKey.get(edge.from),b=districtByKey.get(edge.to);
    if(a&&b)link(ways,a.x,3,a.y,b.x,3,b.y,[.79,.57,.32]);
   }
-  const extent=scene.districts.length?Math.max(260,...scene.districts.map(d=>
-   Math.max(Math.abs(d.x)+d.size,Math.abs(d.y)+d.size))):350;
-  const span=Math.min(30000,Math.ceil(extent/75)*75);
-  for(let x=-span;x<=span;x+=75){
-   link(lines,x,-4,-span,x,-4,span,[.095,.105,.13]);
-   link(lines,-span,-4,x,span,-4,x,[.095,.105,.13]);
+  // Grid around the camera; never allocate line geometry over a million-record world.
+  const half= Math.min(2700,Math.max(400,distance*1.25));
+  const centerX=Math.round(target[0]/100)*100,centerZ=Math.round(target[2]/100)*100;
+  for(let step=-half;step<=half;step+=100){
+   link(lines,centerX+step,-4,centerZ-half,centerX+step,-4,centerZ+half,[.095,.105,.13]);
+   link(lines,centerX-half,-4,centerZ+step,centerX+half,-4,centerZ+step,[.095,.105,.13]);
   }
   buildings=makeMesh(gl,cube,new Float32Array(all));plates=makeMesh(gl,cube,new Float32Array(ground));
   roads=makeLines(gl,new Float32Array(ways));grid=makeLines(gl,new Float32Array(lines));
@@ -207,6 +231,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  function render(){
   raf=0;
   if(!active||lost)return;
+  selectVisible();
   if(dirty)rebuild();
   const view=camera();gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(.025,.033,.053,1);
@@ -242,6 +267,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
  }
  function pick(x,y){
   if(!buildings?.count||lost)return null;
+  selectVisible();
   if(dirty)rebuild();
   gl.bindFramebuffer(gl.FRAMEBUFFER,pickFbo);
   gl.viewport(0,0,canvas.width,canvas.height);gl.clearColor(0,0,0,1);
@@ -254,7 +280,7 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
    1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
   gl.enable(gl.DITHER);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   const i=pixel[0]+pixel[1]*256+pixel[2]*65536-1;
-  schedule();return i>=0&&i<scene.buildings.length?scene.buildings[i].id:null;
+  schedule();return i>=0&&i<visibleBuildings.length?visibleBuildings[i].id:null;
  }
  function renderDetail(){
   const item=scene.buildings.find(b=>b.id===selected);
@@ -304,6 +330,9 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   scene=model.cityFromState(state);
   if(scene.stats.buildings>16777214)throw Error('Город превышает предел адресации WebGL');
   if(!scene.buildings.some(b=>b.id===selected))selected=null;
+  spatial=root.TsukireiSpatial?.build(scene.buildings)||null;
+  lastVisibleCamera=null;
+  selectVisible(true);
   dirty=true;
   const stats=root.document.getElementById('city-stats');
   if(stats)stats.textContent=scene.stats.districts+' районов · '+scene.stats.buildings+' зданий · '+
@@ -395,7 +424,8 @@ function startCity({canvas,detail,districtsList,onNavigate,onInspect}){
   distance=Math.max(140,Math.min(380,distance));
   renderDetail();schedule();return true;
  }
- return{update,activate,search,focus,is3D:true};
+ return{update,activate,search,focus,is3D:true,
+  gpuStats(){return{visible:visibleBuildings.length,total:scene.buildings.length,max:maxGpuBuildings}}};
 }
 root.TsukireiCity3D=Object.freeze({startCity});
 })(globalThis);
