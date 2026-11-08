@@ -151,6 +151,19 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/api/health') {
     json(res, 200, { ok: true, name: 'Tsukirei', version: '0.4.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
+  if (method === 'GET' && pathname === '/api/city/entry') {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    const kind = url.searchParams.get('kind');
+    const id = url.searchParams.get('id');
+    if (kind !== 'notes' && kind !== 'messages' && kind !== 'knowledge')
+      throw new HttpError(400, 'kind: notes, messages или knowledge');
+    if (!id || id.length > 100 || (kind === 'knowledge' ? !validId(id) : !/^[\p{L}\p{N}_:-]{1,100}$/u.test(id)))
+      throw new HttpError(400, 'Неверный идентификатор записи');
+    const entry = database ? await database.cityEntry(kind, id)
+      : kind === 'knowledge' ? null : readLegacyState()[kind].find(item => item.id === id) ?? null;
+    if (!entry) throw new HttpError(404, 'Исходная запись не найдена');
+    json(res, 200, { kind, entry }); return;
+  }
   if (method === 'GET' && pathname === '/api/city/archive') {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const kind = url.searchParams.get('kind');
@@ -169,10 +182,33 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const rows = kind === 'knowledge' ? [] : state[kind];
       page = { total: rows.length, items: rows.slice(offset, offset + limit), revision: null };
     }
+    const compact = url.searchParams.get('compact') === '1';
+    // Transfers only titles/previews, never full bodies for the city overview.
+    // The original text is fetched separately on selection. No Cloud.ru calls.
+    const items = compact ? page.items.map(value => {
+      const record = value as Record<string, unknown>;
+      const str = (v: unknown) => typeof v === 'string' ? v : '';
+      const length = kind === 'notes'
+        ? str(record.title).length + str(record.body).length
+        : kind === 'messages' ? str(record.content).length : str(record.content).length;
+      if (kind === 'notes') return {
+        id: record.id, title: str(record.title).slice(0, 130),
+        body: str(record.body).slice(0, 650), createdAt: record.createdAt, fullLength: length
+      };
+      if (kind === 'messages') return {
+        id: record.id, role: record.role, content: str(record.content).slice(0, 650),
+        createdAt: record.createdAt, fullLength: length
+      };
+      return {
+        id: record.id, source: str(record.source).slice(0, 100),
+        content: str(record.content).slice(0, 650), createdAt: record.createdAt,
+        fullLength: length
+      };
+    }) : page.items;
     json(res, 200, {
       kind, offset, limit, total: page.total,
       hasMore: offset + page.items.length < page.total,
-      items: page.items, revision: page.revision
+      items, revision: page.revision
     });
     return;
   }
