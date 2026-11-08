@@ -10,6 +10,7 @@ let cityArchive = null;
 let cityLoadGeneration = 0;
 let cityLoading = false;
 let cityLoaded = false;
+let citySearchDelay;
 
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
@@ -173,6 +174,34 @@ function renderChat() {
 function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); if (!cityArchive) city?.update(viewState); }
 
 
+function renderCitySearch() {
+  const results = el('city-search-results');
+  const query = el('city-search-input').value.trim();
+  results.replaceChildren();
+  if (query.length < 2) {
+    if (query) results.append(escapeNotNeeded('p', 'city-search-hint', 'Введите минимум 2 символа.'));
+    return;
+  }
+  const matches = city?.search?.(query, 14) || [];
+  if (!matches.length) {
+    results.append(escapeNotNeeded('p', 'city-search-hint', cityLoading ?
+      'Записи ещё загружаются…' : 'Совпадений в городе нет.'));
+    return;
+  }
+  for (const entry of matches) {
+    const button = escapeNotNeeded('button', 'city-search-result');
+    button.type = 'button';
+    button.setAttribute('role', 'listitem');
+    button.append(escapeNotNeeded('span', '', entry.title),
+      escapeNotNeeded('small', '', entry.districtName));
+    button.addEventListener('click', () => {
+      city?.focus?.(entry.id);
+      el('city-canvas').focus();
+    });
+    results.append(button);
+  }
+}
+
 function cityStatus(message, isError = false) {
   const target = el('city-load-status');
   if (target) {
@@ -234,6 +263,7 @@ async function loadCityArchive() {
         // This is much cheaper than rebuilding the whole 3D scene after every page.
         if (loaded >= redrawAt && city && window.location.hash === '#city') {
           city.update(archive);
+          renderCitySearch();
           redrawAt *= 2;
           await new Promise(resolve => requestAnimationFrame(resolve));
           if (generation !== cityLoadGeneration) return;
@@ -243,6 +273,7 @@ async function loadCityArchive() {
     if (generation !== cityLoadGeneration) return;
     cityLoaded = true;
     city.update(archive);
+    renderCitySearch();
     const count = archive.notes.length + archive.messages.length + archive.knowledge.length;
     cityStatus('Полный архив: ' + count.toLocaleString('ru-RU') +
       ' записей · ' + (city.is3D ? 'WebGL 3D' : 'Canvas 2D') +
@@ -260,6 +291,10 @@ async function loadCityArchive() {
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
 el('city-reload').addEventListener('click', staleCity);
+el('city-search-input').addEventListener('input', () => {
+  clearTimeout(citySearchDelay);
+  citySearchDelay = setTimeout(renderCitySearch, 180);
+});
 el('orb-open').addEventListener('click', () => go('city'));
 el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
