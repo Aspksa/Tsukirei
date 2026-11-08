@@ -266,6 +266,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/styles.css') {
     staticFile(res, join(root, 'web', 'styles.css'), 'text/css; charset=utf-8'); return;
   }
+  if (method === 'GET' && pathname === '/city-model.js') {
+    staticFile(res, join(root, 'web', 'city-model.js'), 'text/javascript; charset=utf-8'); return;
+  }
+  if (method === 'GET' && pathname === '/city.js') {
+    staticFile(res, join(root, 'web', 'city.js'), 'text/javascript; charset=utf-8'); return;
+  }
   if (method === 'GET' && pathname === '/main.js') {
     staticFile(res, join(root, 'web', 'main.js'), 'text/javascript; charset=utf-8'); return;
   }

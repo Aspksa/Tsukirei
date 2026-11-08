@@ -1,10 +1,11 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
+const pages = { home: 'Обзор', memory: 'Память', city: 'Город памяти', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
 let toastTimer;
+let city = null;
 
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
@@ -62,6 +63,7 @@ function go(page) {
   });
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
+  city?.activate(page === 'city');
   window.location.hash = page;
 }
 function renderStatus() {
@@ -100,6 +102,7 @@ function renderNotes() {
   if (!viewState.notes.length) { list.append(escapeNotNeeded('div', 'empty-state', 'Заметок пока нет. Создайте первую запись.')); return; }
   viewState.notes.forEach(note => {
     const article = escapeNotNeeded('article', 'entry-card');
+    article.dataset.noteId = note.id;
     const top = escapeNotNeeded('div', 'entry-card-top');
     top.append(escapeNotNeeded('h3', '', note.title));
     top.append(removeButton(() => run(async () => {
@@ -156,10 +159,10 @@ function renderChat() {
   });
   list.scrollTop = list.scrollHeight;
 }
-function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
+function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); city?.update(viewState); }
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
-el('orb-open').addEventListener('click', () => go('memory'));
+el('orb-open').addEventListener('click', () => go('city'));
 el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
@@ -254,6 +257,26 @@ function showFailedStart(message) {
   el('connection-detail').textContent = message + ' Проверьте окно BAT и журналы в папке logs.';
   notify(message, true);
 }
+
+city = globalThis.TsukireiCity?.startCity({
+  canvas: el('city-canvas'),
+  detail: el('city-detail'),
+  districtsList: el('city-district-list'),
+  onNavigate(record) {
+    if (record.kind === 'note') {
+      go('memory');
+      const note = Array.from(document.querySelectorAll('[data-note-id]')).find(item => item.dataset.noteId === record.sourceId);
+      if (note) {
+        note.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        note.classList.add('city-highlight-note');
+        setTimeout(() => note.classList.remove('city-highlight-note'), 1400);
+      }
+    } else {
+      toggleChat(true);
+    }
+  }
+});
+
 api('/api/state').then(data => {
   Object.assign(viewState, data);
   render();

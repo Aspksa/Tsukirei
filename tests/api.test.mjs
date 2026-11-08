@@ -52,7 +52,7 @@ test('Tsukirei startup, API, persistence and static assets', { timeout: 40000 },
   const html = await fetch(base + '/');
   assert.equal(html.status, 200);
   assert.match(await html.text(), /Tsukirei/);
-  for (const asset of ['/main.js', '/styles.css', '/mark.svg']) {
+  for (const asset of ['/main.js', '/city.js', '/city-model.js', '/styles.css', '/mark.svg']) {
     const res = await fetch(base + asset);
     assert.equal(res.status, 200);
     assert.ok((await res.text()).length > 50);

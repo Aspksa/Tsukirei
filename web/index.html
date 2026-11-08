@@ -8,11 +8,14 @@
   <title>Tsukirei — Личное пространство</title>
   <link rel="icon" href="/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/styles.css">
+  <script src="/city-model.js" defer></script>
+  <script src="/city.js" defer></script>
   <script src="/main.js" defer></script>
 </head>
 <body>
   <svg class="icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-city" viewBox="0 0 24 24"><path d="M2 21h20M4 21V10l5-4v15M9 21V4l5-2v19M14 21V8l6-3v16M6 13h1m-1 4h1m5-11h1m-1 4h1m-1 4h1m4-3h1m-1 4h1"/></symbol>
     <symbol id="i-memory" viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-7.8 1.3A5 5 0 0 0 3 13a4.5 4.5 0 0 0 5 7 4.5 4.5 0 0 0 4-3 4.5 4.5 0 0 0 4 3 4.5 4.5 0 0 0 5-7 5 5 0 0 0-1.2-8.7A4 4 0 0 0 12 3z"/><path d="M12 3v14m-6-9 3 2m9-2-3 2M6 15l3-1m9 1-3-1"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8m2 2h3M8 16h9"/></symbol>
     <symbol id="i-agents" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 3v4M9 3h6M8 12h.01M16 12h.01M9 16h6M2 11v4m20-4v4"/></symbol>
@@ -34,6 +37,7 @@
       <nav class="nav" aria-label="Разделы">
         <button class="nav-button selected" data-page="home" data-label="Главная" aria-label="Главная" aria-current="page"><svg><use href="#i-home"/></svg></button>
         <button class="nav-button" data-page="memory" data-label="Память" aria-label="Память"><svg><use href="#i-memory"/></svg></button>
+        <button class="nav-button" data-page="city" data-label="Город памяти" aria-label="Город памяти"><svg><use href="#i-city"/></svg></button>
         <button class="nav-button" data-page="tasks" data-label="Дела" aria-label="Дела"><svg><use href="#i-tasks"/></svg></button>
         <button class="nav-button" data-page="agents" data-label="Агенты" aria-label="Агенты"><svg><use href="#i-agents"/></svg></button>
       </nav>
@@ -49,7 +53,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.1</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.3</span></div>
       </header>
 
       <main class="main">
@@ -62,11 +66,11 @@
             <div class="cosmos-card">
               <div class="cosmos-grid"></div><div class="cosmos-stars"></div>
               <div class="cosmos-top"><span>ЯДРО ПАМЯТИ</span><span class="tiny-gold">◈ LOCAL MEMORY</span></div>
-              <button class="orb-trigger" id="orb-open" title="Открыть память" aria-label="Открыть раздел памяти">
+              <button class="orb-trigger" id="orb-open" title="Открыть город памяти" aria-label="Открыть город памяти">
                 <span class="orbit orbit-1"></span><span class="orbit orbit-2"></span><span class="orbit orbit-3"></span>
                 <span class="orb-glow"></span><span class="orb"></span><span class="orb-point orb-point-a"></span><span class="orb-point orb-point-b"></span>
               </button>
-              <div class="cosmos-footer"><div><strong id="orb-notes-count">0</strong> <span>сохранённых знаний</span></div><span class="cosmos-footer-cta">Открыть память →</span></div>
+              <div class="cosmos-footer"><div><strong id="orb-notes-count">0</strong> <span>сохранённых знаний</span></div><span class="cosmos-footer-cta">Открыть город →</span></div>
             </div>
             <div class="insight-column">
               <div class="connection-panel glass-panel">
@@ -96,6 +100,35 @@
               <button class="gold-button" type="submit"><svg><use href="#i-plus"/></svg> Сохранить в память</button>
             </form>
             <div class="item-column"><div class="list-heading"><h2>Мои записи</h2><span id="note-list-meta">Локальный архив</span></div><div class="item-list" id="note-list"><div class="empty-state">Заметок пока нет. Создайте первую запись.</div></div></div>
+          </div>
+        </section>
+
+        <section class="page city-page" id="page-city" hidden aria-labelledby="city-title">
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="small-line"></span> MEMORY ATLAS / LOCAL WORLD</div>
+              <h1 id="city-title">Город <em>памяти.</em></h1>
+              <p>Районы — темы, здания — реальные записи и диалоги, дороги — совпадения значимых слов.</p>
+            </div>
+            <span class="date-chip" id="city-count">0 записей</span>
+          </div>
+          <div class="city-layout">
+            <div class="city-stage" aria-label="Интерактивная изометрическая карта знаний">
+              <div class="city-stage-watermark" aria-hidden="true"><span>TSUKIREI</span><small>MEMORY / CITY INDEX</small></div>
+              <canvas id="city-canvas" tabindex="0" aria-label="Город памяти. Перетаскивайте для перемещения, вращайте колесо для масштаба, щёлкните по зданию для информации; список районов доступен справа"></canvas>
+              <div class="city-stage-footer"><span class="city-indicator"></span><span>ЛОКАЛЬНЫЕ ДАННЫЕ · БЕЗ ОБЛАЧНЫХ ЗАПРОСОВ</span></div>
+            </div>
+            <aside class="city-sidebar" aria-label="Данные города">
+              <div class="glass-panel city-overview">
+                <div class="panel-kicker">СОСТОЯНИЕ ГОРОДА</div>
+                <strong id="city-stats">0 районов · 0 зданий · 0 связей</strong>
+                <p>Высота здания зависит от объёма текста. Районы группируются по ключевым словам, дороги показывают общие слова между районами.</p>
+                <button class="ghost-button" id="city-fit" type="button">Показать весь город</button>
+                <div class="city-help">Перетаскивание — перемещение · колесо — масштаб · клик — открыть данные</div>
+              </div>
+              <div class="glass-panel city-inspector"><span class="panel-kicker">СВЕДЕНИЯ О ЗДАНИИ</span><div id="city-detail" class="city-detail" aria-live="polite"><p class="city-instruction">Нажмите на здание, чтобы увидеть исходную запись.</p></div></div>
+              <div class="glass-panel city-districts"><span class="panel-kicker">РАЙОНЫ</span><div id="city-district-list" class="city-district-list"></div></div>
+              <button class="text-action city-add-note" data-page="memory" type="button">Добавить знание <svg><use href="#i-arrow"/></svg></button>
+            </aside>
           </div>
         </section>
 
