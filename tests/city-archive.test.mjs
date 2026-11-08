@@ -36,6 +36,21 @@ test('City archive reads all records in bounded pages without Cloud.ru or 250-me
     const response = await fetch(base + '/api/city/archive?kind=' + kind + '&offset=' + offset + '&limit=' + limit);
     return { status: response.status, data: await response.json() };
   }
+  const compactRes = await fetch(base + '/api/city/archive?kind=messages&offset=0&limit=3&compact=1');
+  const compact = await compactRes.json();
+  assert.equal(compactRes.status, 200);
+  assert.equal(compact.total, 625);
+  assert.equal(compact.items.length, 3);
+  assert.equal(compact.items[0].fullLength, messages[0].content.length);
+  assert.equal(compact.items[0].content, messages[0].content);
+  const originalRes = await fetch(base + '/api/city/entry?kind=messages&id=msg-0');
+  const original = await originalRes.json();
+  assert.equal(originalRes.status, 200);
+  assert.equal(original.entry.content, messages[0].content);
+  const badEntry = await fetch(base + '/api/city/entry?kind=messages&id=%3Cscript%3E');
+  assert.equal(badEntry.status, 400);
+  const missing = await fetch(base + '/api/city/entry?kind=notes&id=missing');
+  assert.equal(missing.status, 404);
   const all = [];
   for (let offset = 0; offset < messages.length; offset += 200) {
     const response = await page('messages', offset, 200);
