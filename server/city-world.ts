@@ -121,10 +121,39 @@ export class CityWorldIndex {
     const bottom=Math.floor((y-maxRadius)/TILE),top=Math.floor((y+maxRadius)/TILE);
     const area=(right-left+1)*(top-bottom+1);
     const distLimit=maxRadius*maxRadius;
-    const candidates: Array<{i:number;distance:number}>=[];
+    // Bounded max-heap: only nearest entries consume per-query memory.
+    const heap:Array<{i:number;distance:number}>=[];
+    let candidates=0;
+    const worse=(a:{i:number;distance:number},b:{i:number;distance:number}) =>
+      a.distance>b.distance||(a.distance===b.distance&&a.i>b.i);
+    const insert=(node:{i:number;distance:number})=>{
+      heap.push(node);
+      let j=heap.length-1;
+      while(j>0){
+        const p=(j-1)>>1;
+        if(!worse(heap[j],heap[p]))break;
+        [heap[j],heap[p]]=[heap[p],heap[j]];
+        j=p;
+      }
+    };
+    const shiftDown=()=>{
+      let j=0;
+      while(true){
+        let child=j*2+1;
+        if(child>=heap.length)break;
+        if(child+1<heap.length&&worse(heap[child+1],heap[child]))child++;
+        if(!worse(heap[child],heap[j]))break;
+        [heap[child],heap[j]]=[heap[j],heap[child]];
+        j=child;
+      }
+    };
     const visit=(id:number)=>{
       const row=this.rows[id],distance=(row.x-x)**2+(row.y-y)**2;
-      if(distance<=distLimit)candidates.push({i:id,distance});
+      if(distance>distLimit)return;
+      candidates++;
+      const node={i:id,distance};
+      if(heap.length<budget)insert(node);
+      else if(worse(heap[0],node)){heap[0]=node;shiftDown();}
     };
     if(area>this.tiles.size*3){
       for(const [key,ids] of this.tiles){
@@ -137,12 +166,11 @@ export class CityWorldIndex {
         const ids=this.tiles.get(tx+','+ty);if(ids)for(const id of ids)visit(id);
       }
     }
-    // Candidate count is capped in output, not in the source archive.
-    candidates.sort((a,b)=>a.distance-b.distance||a.i-b.i);
-    const selected=candidates.slice(0,budget).map(item=>this.rows[item.i]);
+    const selected=heap.sort((a,b)=>a.distance-b.distance||a.i-b.i)
+      .map(item=>this.rows[item.i]);
     return {
-      buildings:selected,displayed:selected.length,nearby:candidates.length,
-      total:this.rows.length,limited:candidates.length>budget
+      buildings:selected,displayed:selected.length,nearby:candidates,
+      total:this.rows.length,limited:candidates>budget
     };
   }
   search(query:string,limit=14){
