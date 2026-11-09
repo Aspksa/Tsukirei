@@ -155,3 +155,47 @@
 @media(max-width:1030px){.living-layout{grid-template-columns:1fr}.living-sidebar{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
 @media(max-width:720px){.living-sidebar{display:flex}.living-metrics{grid-template-columns:1fr 1fr}.living-presence{gap:13px;padding:17px}.living-presence-orb{width:65px;height:65px;flex-basis:65px;font-size:30px}.living-presence-copy h2{font-size:16px}.living-presence>.ghost-button{font-size:10px;padding:8px}.living-section{padding:18px}}
 @media(prefers-reduced-motion:reduce){.living-presence-orb[data-mode=reflecting]{animation:none}}
+
+
+/* Cognitive Evolution v1.1 — compact evidence-first, dark and gold, no fake mind simulation. */
+.cog-layout{display:grid;grid-template-columns:minmax(0,1.44fr) minmax(285px,.92fr);gap:20px;align-items:start}
+.cog-main,.cog-side{display:flex;flex-direction:column;gap:17px;min-width:0}
+.cog-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.cog-metric{display:flex;flex-direction:column;gap:8px;padding:16px}
+.cog-metric small{font-size:10px;letter-spacing:.06em;color:#c19b6b}
+.cog-metric strong{font-size:27px;color:#ead3ae;font-weight:550;font-variant-numeric:tabular-nums}
+.cog-metric span{font-size:10px;color:#90858d;line-height:1.5}
+.cog-section{padding:22px}
+.cog-section .list-heading{margin-bottom:13px;gap:8px}
+.cog-section .list-heading h2{font-size:17px}
+.cog-section .list-heading span{font-size:10px;color:#9e9196}
+.cog-hint{font-size:11px;color:#a1979c;line-height:1.65;margin:8px 0 15px}
+.cog-search{display:flex;gap:9px;align-items:stretch;margin-bottom:14px}
+.cog-search input,.cog-goal-form input:not([type=checkbox]),.cog-goal-form textarea,.cog-goal-form select{min-width:0;width:100%;padding:11px 12px;color:#ebd8bd;background:#0d0f15;border:1px solid #44383b;border-radius:9px;font:inherit;font-size:12px}
+.cog-search input{flex:1}
+.cog-search button{font-size:11px;white-space:nowrap}
+.cog-output{display:flex;flex-direction:column;gap:8px;border-radius:11px;background:#14131a;padding:12px}
+.cog-output:empty{display:none}
+.cog-output strong{font-size:12px;color:#e5c69a}
+.cog-output p{color:#b2a7ad;font-size:11px;line-height:1.6}
+.cog-output .cog-warning{color:#d8a56e}
+.cog-goal-form{display:flex;flex-direction:column;gap:10px;margin-bottom:19px}
+.cog-goal-form label,.cog-field-label{color:#c1b4b4;font-size:11px}
+.cog-goal-form textarea{resize:vertical;min-height:75px}
+.cog-goal-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cog-goal-row label{display:flex;flex-direction:column;gap:8px;min-width:0}
+.cog-task-options{display:flex;flex-direction:column;gap:7px;max-height:130px;overflow:auto;padding:8px 10px;border:1px solid #383035;border-radius:10px;background:#15151a}
+.cog-task-option{display:flex;gap:8px;align-items:flex-start;color:#b9aeb3;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.cog-task-option input{accent-color:#c9aa77;margin-top:2px}
+.cog-list{display:flex;flex-direction:column;gap:9px;min-width:0}
+.cog-scroll{max-height:400px;overflow:auto}
+.cog-record{border:1px solid #40353b;background:#16151c;border-radius:11px;padding:12px 13px;overflow-wrap:anywhere}
+.cog-record-body{display:flex;flex-direction:column;gap:6px}
+.cog-record-body strong{font-size:12px;color:#dfc69f;line-height:1.5}
+.cog-record-body p{font-size:11px;color:#b4a8af;line-height:1.6;white-space:pre-wrap}
+.cog-record-body small{font-size:10px;color:#8f8690;line-height:1.45}
+.cog-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.cog-actions button{font-size:10px;padding:8px 10px;min-width:0}
+.cog-section .ghost-button{font-size:11px}
+@media(max-width:1040px){.cog-layout{grid-template-columns:1fr}.cog-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.cog-side>*:last-child{grid-column:1/-1}}
+@media(max-width:720px){.cog-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.cog-side{display:flex}.cog-section{padding:17px}.cog-search{flex-direction:column}.cog-goal-row{grid-template-columns:1fr}}
