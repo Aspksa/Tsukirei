@@ -222,6 +222,12 @@ export class CognitiveCore{
         fact.status='confirmed';
       }else if(decision==='reject'){fact.status='rejected';}
       else throw Error('Неизвестное решение');
+      const event:TimelineEvent={id:'fact-decision:'+fact.id,type:'fact',
+        title:(decision==='confirm'?'Подтверждено: ':'Отклонено: ')+fact.subject+' / '+fact.field,
+        at:this.now(),sourceId:fact.sourceId,observedAt:this.now()};
+      this.data.timeline.unshift(event);
+      this.data.timeline.sort((a,b)=>b.at.localeCompare(a.at)||a.id.localeCompare(b.id));
+      this.data.timeline=this.data.timeline.slice(0,900);
       this.trace('knowledge','Решение владельца по кандидату знания',1);
       this.save();return fact;
     });
@@ -286,7 +292,7 @@ export class CognitiveCore{
       this.trace('observation','Начата локальная обработка источников',notes.length+recent.length+docs.length);
       const known=new Set(this.data.facts.map(x=>x.sourceId+'|'+x.key+'|'+x.value));
       let facts=0;
-      const currentNotes=new Set(notes.map(n=>'note:'+n.id));
+      const currentNotes=new Map(state.notes.map(n=>['note:'+n.id,n]));
       for(const note of notes){
         for(const fact of getFacts(note)){
           const key=fact.sourceId+'|'+fact.key+'|'+fact.value;
@@ -297,7 +303,8 @@ export class CognitiveCore{
       }
       // Do not destroy historical versions. Mark unavailable sources explicitly.
       for(const fact of this.data.facts){
-        if(!currentNotes.has(fact.sourceId)&&
+        const original=currentNotes.get(fact.sourceId);
+        if((!original||!getFacts(original).some(v=>v.key===fact.key&&v.value===fact.value))&&
           fact.status!=='source_missing'&&fact.status!=='superseded'&&fact.status!=='rejected')
           fact.status='source_missing';
       }
@@ -337,11 +344,16 @@ export class CognitiveCore{
         if(edges.length>=300)break;
       }
       for(const goal of this.data.goals.slice(0,80)){
-        const from=addNode(goal.title,'goal');
+        const from='goal:'+goal.id;
+        nodes.set(from,{id:from,label:goal.title,kind:'goal'});
         for(const id of goal.taskIds){
           const task=state.tasks.find(t=>t.id===id);
-          if(task)edges.push({from,to:addNode(task.title,'task'),relation:'содержит задачу',
+          if(task){
+            const to='task:'+task.id;
+            nodes.set(to,{id:to,label:shorten(task.title,70),kind:'task'});
+            edges.push({from,to,relation:'содержит задачу',
             evidenceId:'goal:'+goal.id,excerpt:'Связь задачи установлена владельцем'});
+          }
         }
       }
       this.data.nodes=[...nodes.values()].slice(0,350);
