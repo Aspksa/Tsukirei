@@ -107,6 +107,18 @@ try{
  assert.equal(hasSoulControl.lesson,true);
  assert.equal(hasSoulControl.journal,true);
  assert.equal(hasSoulControl.initiative,true);
+ await evaluate("document.querySelector('[data-page=living]').click();true");
+ assert.equal(await evaluate("document.getElementById('page-living').hidden"),false);
+ await until(()=>evaluate("document.getElementById('living-header-status')?.textContent?.includes('Только локально')"),'Living Core initial status');
+ const start=await evaluate("({cloudEnabled:document.getElementById('living-cloud-enabled').checked,shareRecentText:document.getElementById('living-share-text').checked,local:document.getElementById('living-local-count').textContent,buttonDisabled:document.getElementById('living-run-cloud').disabled})");
+ assert.equal(start.cloudEnabled,false);
+ assert.equal(start.shareRecentText,false);
+ assert.equal(start.local,'0');
+ assert.equal(start.buttonDisabled,true,'Paid model action disabled until consent');
+ await evaluate("document.getElementById('living-run-local').click();true");
+ await until(()=>evaluate("Number(document.getElementById('living-local-count').textContent)>=1"),'Living local reflection');
+ assert.equal(await evaluate("document.querySelectorAll('#living-journal .living-event').length>0"),true);
+ assert.equal(await evaluate("document.getElementById('living-budget-count').textContent.trim()"),'0 / 2');
  const result=await evaluate("({title:document.querySelector('.rag-result-card h3')?.textContent,meta:document.getElementById('rag-results-meta')?.textContent,hasImport:!!document.getElementById('rag-import-form'),hasChatToggle:!!document.getElementById('chat-use-memory'),hasCity:!!document.getElementById('page-city')})");
  assert.match(result.title,/Двигатель Impreza/);
  assert.equal(result.hasImport,true);assert.equal(result.hasChatToggle,true);
