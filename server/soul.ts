@@ -36,6 +36,7 @@ type SoulData = {
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
   plannedGoals?:SoulGoal[];
+  planReviews?:{lastRunAt:string|null;items:Array<{id:string;goalId:string;createdAt:string;reason:string;proposedStep:string;status:'pending'|'accepted'|'dismissed';sourceId:string}>};
   commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string;linkedTaskId?:string}>;
   commitmentWatch?:{lastRunAt:string|null;items:Array<{id:string;commitmentId:string;createdAt:string;reason:string;status:'pending'|'dismissed';sourceId:string}>};
   characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
@@ -69,7 +70,7 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],plannedGoals:[],commitmentWatch:{lastRunAt:null,items:[]},
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],plannedGoals:[],planReviews:{lastRunAt:null,items:[]},commitmentWatch:{lastRunAt:null,items:[]},
     characterEvolution:{lastReviewedAt:null,history:[]},
     outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
@@ -86,6 +87,7 @@ function validate(value:unknown):SoulData {
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
   if(!Array.isArray(state.commitments))state.commitments=[];
   if(!Array.isArray(state.plannedGoals))state.plannedGoals=[];
+  if(!state.planReviews||!Array.isArray(state.planReviews.items))state.planReviews={lastRunAt:null,items:[]};
   if(!state.commitmentWatch||!Array.isArray(state.commitmentWatch.items))state.commitmentWatch={lastRunAt:null,items:[]};
   if(!state.characterEvolution||!Array.isArray(state.characterEvolution.history))state.characterEvolution={lastReviewedAt:null,history:[]};
   if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
@@ -265,6 +267,60 @@ export class SoulEngine {
       if(detail)item.note=detail;
       this.journal('reflection','Обязательство: '+status+' — '+item.title.slice(0,120),evidence||item.sourceId);
       return {...item,evidenceIds:[...item.evidenceIds]};
+    });
+  }
+  planReviewReport(){
+    if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled||
+      !this.data.settings.initiativeEnabled)return {items:[],policy:'Анализ планов отключён настройками'};
+    const goals=new Map((this.data.plannedGoals??[]).map(g=>[g.id,g]));
+    return {items:(this.data.planReviews?.items??[]).filter(x=>x.status==='pending'&&goals.get(x.goalId)?.status==='active').slice(0,30),
+      policy:'Предложения по улучшению плана не выполняются и не добавляются в цель без принятия владельцем.'};
+  }
+  reviewPlannedGoals(now=new Date()){
+    return this.modify(()=>{
+      const settings=this.data.settings;
+      if(!settings.personalContext||!settings.reflectionsEnabled||!settings.initiativeEnabled)
+        return {created:0,reason:'Анализ планов отключён настройками'};
+      const reviews=this.data.planReviews??{lastRunAt:null,items:[]};
+      const lastRun=Date.parse(reviews.lastRunAt??'');
+      if(Number.isFinite(lastRun)&&now.getTime()-lastRun<24*86400000)
+        return {created:0,reason:'Проверка уже выполнена'};
+      let created=0;
+      for(const goal of this.data.plannedGoals??[]){
+        if(goal.status!=='active')continue;
+        const age=now.getTime()-Date.parse(goal.updatedAt);
+        if(!Number.isFinite(age)||age<7*86400000)continue;
+        const previous=reviews.items.find(x=>x.goalId===goal.id);
+        if(previous&&now.getTime()-Date.parse(previous.createdAt)<14*86400000)continue;
+        const pending=goal.steps.find(s=>s.status==='pending');
+        if(!pending)continue;
+        reviews.items.unshift({id:randomUUID(),goalId:goal.id,createdAt:now.toISOString(),
+          reason:'План не обновлялся более семи дней. Это не означает просрочку; предлагается уточнить препятствия и проверить следующий шаг.',
+          proposedStep:'Проверить препятствия для шага: '+pending.title.slice(0,130),
+          status:'pending',sourceId:goal.sourceId});
+        created++;
+      }
+      reviews.lastRunAt=now.toISOString();reviews.items=reviews.items.slice(0,100);
+      this.data.planReviews=reviews;
+      return {created};
+    });
+  }
+  decidePlanReview(id:string,decision:'accepted'|'dismissed'){
+    if(decision!=='accepted'&&decision!=='dismissed')throw new Error('Некорректное решение');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled||
+        !this.data.settings.initiativeEnabled)throw new Error('Анализ планов отключён');
+      const review=(this.data.planReviews?.items??[]).find(x=>x.id===id);
+      if(!review||review.status!=='pending')throw new Error('Предложение не найдено или уже обработано');
+      const goal=(this.data.plannedGoals??[]).find(g=>g.id===review.goalId);
+      if(!goal||goal.status!=='active')throw new Error('Цель больше не активна');
+      if(decision==='accepted'){
+        if(goal.steps.length>=12)throw new Error('Достигнут лимит 12 шагов');
+        goal.steps.push({id:randomUUID(),title:review.proposedStep,status:'pending'});
+        goal.updatedAt=new Date().toISOString();
+      }
+      review.status=decision;
+      return {review,goal};
     });
   }
   plannedGoalsReport(){
