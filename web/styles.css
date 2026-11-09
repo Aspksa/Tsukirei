@@ -578,3 +578,11 @@ img,svg,video,canvas{max-width:100%}
 .monitor-server-step span{color:#f1aaa9;font-size:11px;white-space:nowrap}
 .monitor-server-step span[data-ok="true"]{color:#9ed4b9}
 @media(max-width:620px){.monitor-server-step{grid-template-columns:1fr;gap:5px}.monitor-server-step span{white-space:normal}}
+
+/* Correlated chat trace selector */
+.monitor-trace-picker{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
+.monitor-trace-picker label,.monitor-trace-picker span{font-size:12px;color:#b8b0c4}
+.monitor-trace-picker select{background:#211a2d;color:#f4eff8;border:1px solid #7a6487;border-radius:10px;padding:10px 12px;min-height:42px;max-width:100%}
+.monitor-trace-picker select:focus-visible{outline:2px solid #e6bf78;outline-offset:2px}
+.monitor-trace-picker span{margin-left:auto}
+@media(max-width:520px){.monitor-trace-picker select{width:100%}}
