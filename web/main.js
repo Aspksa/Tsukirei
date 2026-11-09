@@ -174,7 +174,7 @@ function go(page) {
   el('mobile-menu').setAttribute('aria-expanded','false');
   el('mobile-menu').setAttribute('aria-label','Открыть меню');
   if (window.location.hash !== '#' + page) window.location.hash = page;
-  if (page === 'brain') { void refreshBrainKnowledge(); void refreshBrainGrowth(); }
+  if (page === 'brain') { void refreshBrainKnowledge(); void refreshBrainGrowth(); void refreshRagStudio(); }
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
   if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
   if (page === 'living') globalThis.TsukireiLivingUI?.refresh();
