@@ -27,7 +27,7 @@ test('Cognitive v1.1 APIs are offline, preserve history and expose only real pro
   const value=await res.json();
   return{status:res.status,data:value};
  };
- assert.equal((await api('/api/health')).data.version,'1.1.0');
+ assert.equal((await api('/api/health')).data.version,'1.2.0');
  assert.equal((await api('/api/cognition')).data.metrics.scans,0);
  const note=await api('/api/notes','POST',{title:'Модуль памяти',body:'Состояние: рабочее\nMemOS использует PostgreSQL.'});
  assert.equal(note.status,201);
