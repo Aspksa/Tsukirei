@@ -329,6 +329,12 @@ export async function connectPostgres(dataDir: string) {
           createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
         })) as RagSource[];
       },
+      async ragPendingVectors(limit=20):Promise<Array<{key:string;checksum:string;content:string}>>{
+        const rows=await sql`SELECT source_key,checksum,content FROM tsukirei_rag_index
+          WHERE embedding IS NULL ORDER BY updated_at DESC LIMIT ${limit}`;
+        return rows.map(row=>({key:String(row.source_key),checksum:String(row.checksum),
+          content:String(row.content)}));
+      },
       async ragSaveVector(key:string,checksum:string,model:string,embedding:number[]) {
         const repr='['+embedding.join(',')+']';
         const rows=await sql`UPDATE tsukirei_rag_index
