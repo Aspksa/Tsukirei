@@ -210,3 +210,13 @@ test('monitor stage filter applies to all diagnostics and clipboard report',()=>
  assert.match(main,/monitor-stage-filter'\)\.addEventListener\('change',renderMonitorServerSteps\)/);
  assert.match(css,/\.monitor-trace-picker select:focus-visible/);
 });
+
+test('Brain RAG studio shows live engine health with accessible loading and error states',()=>{
+ assert.match(app,/id="rag-studio-status"/);
+ assert.match(app,/id="rag-studio-refresh"/);
+ assert.match(main,/async function refreshRagStudio\(\)/);
+ assert.match(main,/api\('\/api\/rag\/engine'\)/);
+ assert.match(main,/status\.dataset\.state='error'/);
+ assert.match(main,/void refreshRagStudio\(\)/);
+ assert.match(css,/\.rag-studio-metrics\{/);
+});
