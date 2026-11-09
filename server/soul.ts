@@ -34,6 +34,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
+  commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string}>;
   characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
   reflectionGoals?:{lastRunAt:string|null;history:Array<{at:string;goalId:string;title:string;reason:string;sourceIds:string[];state:'observing'|'needs-review'}>};
   outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
@@ -65,7 +66,7 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],
     characterEvolution:{lastReviewedAt:null,history:[]},
     outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
@@ -80,6 +81,7 @@ function validate(value:unknown):SoulData {
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
+  if(!Array.isArray(state.commitments))state.commitments=[];
   if(!state.characterEvolution||!Array.isArray(state.characterEvolution.history))state.characterEvolution={lastReviewedAt:null,history:[]};
   if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
   if(!state.outreach||!Array.isArray(state.outreach.items))state.outreach={lastPreparedAt:null,items:[]};
@@ -196,8 +198,8 @@ export class SoulEngine {
       autobiography,relationship:{confirmedPreferences:preferences.map(p=>({text:p.text,sourceId:p.source})),
         rememberedCorrections:lessons.map(l=>({text:l.text,sourceId:l.source})),
         milestones:autobiography.filter(e=>e.type==='task').slice(0,5)},
-      commitments:{observedCompletedTasks:pendingPromises,unverifiedPromises:[],
-        note:'Обещания ассистента нельзя достоверно извлечь из краткого журнала; необходим отдельный реестр обязательств.'},
+      commitments:{observedCompletedTasks:pendingPromises,ledger:enabled?(d.commitments??[]).slice(0,20):[],
+        note:'Обязательства добавляются явно. Выполнение требует источника подтверждения, не выводится из текста ответа.'},
       interests:preferences.map(p=>p.text).slice(0,5),
       aspirations:goals.map(g=>({title:g.title,reason:g.reason,sourceIds:g.sourceIds})),
       imagination:{futureScenarios:goals.slice(0,3).map(g=>({idea:'Если устранить проблему: '+g.title,assumption:'Требует проверки, не предсказание'}))},
@@ -213,6 +215,50 @@ export class SoulEngine {
         initiativeEnabled:d.settings.initiativeEnabled},
       statement:'Модель личности и истории, не доказательство сознания, чувств или автономного выполнения задач.'
     };
+  }
+  commitmentReport(){
+    if(!this.data.settings.personalContext)
+      return {items:[],policy:'Персональный контекст отключён'};
+    return {items:(this.data.commitments??[]).slice(0,100).map(x=>({...x,evidenceIds:[...x.evidenceIds]})),
+      policy:'Реестр явных обязательств. Завершение фиксируется только с источником подтверждения; записи не означают автоматическое выполнение.'};
+  }
+  addCommitment(title:unknown,sourceId:unknown){
+    const clean=bounded(title,180,'Обязательство');
+    const source=bounded(sourceId,120,'Источник');
+    if(BEHAVIOR_INJECTION.test(clean)||!(/^(chat|task|manual):[\\w.-]{1,100}$/u).test(source))
+      throw new Error('Недопустимое обязательство или источник');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const existing=(this.data.commitments??[]).find(x=>x.sourceId===source&&x.title===clean);
+      if(existing)return {...existing};
+      const at=new Date().toISOString();
+      const item={id:randomUUID(),title:clean,sourceId:source,createdAt:at,updatedAt:at,
+        status:'proposed' as const,evidenceIds:[] as string[],note:''};
+      this.data.commitments=[item,...(this.data.commitments??[])].slice(0,150);
+      this.journal('reflection','Зафиксировано предложенное обязательство: '+clean.slice(0,130),source);
+      return {...item};
+    });
+  }
+  decideCommitment(id:string,status:'accepted'|'completed'|'failed'|'cancelled',evidenceId?:string,note?:string){
+    if(!['accepted','completed','failed','cancelled'].includes(status))throw new Error('Недопустимый статус');
+    const evidence=evidenceId?bounded(evidenceId,120,'Источник подтверждения'):'';
+    if(evidence&&!(/^(chat|task|manual):[\\w.-]{1,100}$/u).test(evidence))throw new Error('Недопустимый источник');
+    const detail=note?bounded(note,240,'Комментарий'):'';
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const item=(this.data.commitments??[]).find(x=>x.id===id);
+      if(!item)throw new Error('Обязательство не найдено');
+      if(['completed','failed','cancelled'].includes(item.status))throw new Error('Завершённое обязательство нельзя изменять');
+      if(status==='accepted'&&item.status!=='proposed')throw new Error('Уже принято');
+      if(status==='completed'&&(item.status!=='accepted'||!evidence))
+        throw new Error('Для завершения необходимо принятие и источник подтверждения');
+      if(status==='failed'&&item.status!=='accepted')throw new Error('Сначала примите обязательство');
+      item.status=status;item.updatedAt=new Date().toISOString();
+      if(evidence&&!item.evidenceIds.includes(evidence))item.evidenceIds.push(evidence);
+      if(detail)item.note=detail;
+      this.journal('reflection','Обязательство: '+status+' — '+item.title.slice(0,120),evidence||item.sourceId);
+      return {...item,evidenceIds:[...item.evidenceIds]};
+    });
   }
   characterEvolutionReport(){
     if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled)
@@ -544,8 +590,9 @@ export class SoulEngine {
     const world=this.innerWorld();
     const decision=this.experienceDecision();
     const evolution=this.characterEvolutionReport();
+    const commitments=this.commitmentReport().items.filter(x=>x.status==='accepted').slice(0,3);
     const profile=this.personalityProfile();
-    return base+(evolution.activeStrategy?'\nПроверенная стратегия общения: '+evolution.activeStrategy+'.':'')+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
+    return base+(commitments.length?'\nПринятые, но не завершённые обязательства (не утверждай, что они выполнены): '+commitments.map(x=>x.title.slice(0,120)).join('; ')+'.':'')+(evolution.activeStrategy?'\nПроверенная стратегия общения: '+evolution.activeStrategy+'.':'')+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
       '. Ценности: '+profile.character.values.join(', ')+
       '. Модель настроения (стиль ответа, не чувства): '+profile.emotionalModel.mood+
       '. История и опыт отражены в подтверждённых предпочтениях и уроках. '+
