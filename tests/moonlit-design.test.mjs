@@ -98,3 +98,15 @@ test('live brain request inspector records only API route metadata',()=>{
  assert.match(main,/brainRequestTrace\.unshift\(\{route,method,status,duration,at:new Date\(\)\}\)/);
  assert.match(css,/\.brain-trace-entry\{/);
 });
+
+test('live API monitor is a dedicated sidebar page, not embedded in brain',()=>{
+ assert.match(app,/data-page="monitor" data-label="Монитор"/);
+ assert.match(app,/id="page-monitor" hidden aria-labelledby="monitor-title"/);
+ assert.match(app,/id="brain-trace-list" role="log"/);
+ assert.match(main,/monitor: 'Монитор'/);
+ const monitorStart=app.indexOf('id="page-monitor"');
+ const brainStart=app.indexOf('id="page-brain"');
+ const traceStart=app.indexOf('id="brain-trace-list"');
+ assert.ok(monitorStart>=0 && monitorStart<brainStart);
+ assert.ok(traceStart>monitorStart && traceStart<brainStart);
+});
