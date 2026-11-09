@@ -169,6 +169,48 @@ export class SoulEngine {
   qualityReport(){
     return feedbackQuality(this.data.feedbackEvents??[]);
   }
+  innerWorld(now=new Date()){
+    const d=this.data;
+    const enabled=d.settings.personalContext;
+    const journal=enabled?d.journal.filter(j=>!BEHAVIOR_INJECTION.test(j.text)).slice(0,80):[];
+    const preferences=enabled?d.preferences.filter(p=>p.status==='confirmed'&&!BEHAVIOR_INJECTION.test(p.text)).slice(0,12):[];
+    const lessons=enabled?d.lessons.filter(l=>l.confirmed&&!BEHAVIOR_INJECTION.test(l.text)).slice(0,12):[];
+    const goals=d.settings.reflectionsEnabled&&enabled?(d.reflectionGoals?.history??[]).filter(g=>g.state==='needs-review').slice(0,6):[];
+    const initiatives=d.settings.initiativeEnabled&&enabled?d.initiatives.filter(i=>i.status==='new').slice(0,6):[];
+    const meaningful=journal.filter(j=>['task','feedback','preference','reflection','growth'].includes(j.type));
+    const latestFeedback=(enabled?(d.feedbackEvents??[]):[]).filter(e=>{const age=now.getTime()-Date.parse(e.at);return age>=0&&age<=7*86400000;});
+    const positives=latestFeedback.filter(e=>e.rating==='positive').length;
+    const negatives=latestFeedback.filter(e=>e.rating==='negative').length;
+    const mood=negatives>=2&&negatives>positives?'сосредоточенный':positives>=2&&positives>negatives?'воодушевлённый':'спокойный';
+    const autobiography=meaningful.slice(0,20).map(j=>({at:j.at,type:j.type,summary:j.text.slice(0,180),sourceId:j.source??null}));
+    const pendingPromises=enabled?journal.filter(j=>j.type==='task').slice(0,8).map(j=>({at:j.at,summary:j.text.slice(0,140),sourceId:j.source??null,status:'completed-by-owner'})):[];
+    const dilemmas=goals.filter(g=>g.sourceIds.length<2).map(g=>({title:g.title,reason:'Недостаточно независимых источников'}));
+    return {
+      identity:{name:'Цукирэй',character:['заботливая','любознательная','ответственная','самокритичная'],
+        values:['честность','приватность','уважение решений владельца','проверяемость'],
+        philosophy:'Лучше признать неопределённость, чем выдумать факт'},
+      emotionalModel:{mood,kind:'стиль общения, не переживание',signals:{positive:positives,negative:negatives}},
+      autobiography,relationship:{confirmedPreferences:preferences.map(p=>({text:p.text,sourceId:p.source})),
+        rememberedCorrections:lessons.map(l=>({text:l.text,sourceId:l.source})),
+        milestones:autobiography.filter(e=>e.type==='task').slice(0,5)},
+      commitments:{observedCompletedTasks:pendingPromises,unverifiedPromises:[],
+        note:'Обещания ассистента нельзя достоверно извлечь из краткого журнала; необходим отдельный реестр обязательств.'},
+      interests:preferences.map(p=>p.text).slice(0,5),
+      aspirations:goals.map(g=>({title:g.title,reason:g.reason,sourceIds:g.sourceIds})),
+      imagination:{futureScenarios:goals.slice(0,3).map(g=>({idea:'Если устранить проблему: '+g.title,assumption:'Требует проверки, не предсказание'}))},
+      autonomy:{proposals:initiatives.map(i=>({title:i.title,reason:i.reason,sourceIds:i.sourceIds})),
+        actionsRequireApproval:true},
+      selfKnowledge:{strengths:['сохранение подтверждённых предпочтений','фиксация обратной связи'],
+        limits:['Нет доказанных субъективных чувств','Нет самостоятельного обучения весов модели','Гипотезы требуют проверки'],
+        conflicts:dilemmas},
+      creativity:{mode:'Идеи и альтернативы по запросу или при разрешённой инициативе'},
+      conversation:{tone:d.settings.tone,address:d.settings.address,adaptation:'Учитывать подтверждённые предпочтения и контекст'},
+      continuity:{updatedAt:d.updatedAt,historyEvents:meaningful.length,storage:'локальный soul-state.json'},
+      privacy:{personalContextEnabled:enabled,reflectionsEnabled:d.settings.reflectionsEnabled,
+        initiativeEnabled:d.settings.initiativeEnabled},
+      statement:'Модель личности и истории, не доказательство сознания, чувств или автономного выполнения задач.'
+    };
+  }
   reflectionActionPlans(){
     if(!this.data.settings.reflectionsEnabled||!this.data.settings.personalContext)
       return {items:[],policy:'Рефлексия или персональный контекст отключены'};
@@ -416,8 +458,9 @@ export class SoulEngine {
   prompt(withMemory=true){
     const base=renderPersona(this.data.settings,this.data.preferences,this.data.lessons,withMemory);
     if(!withMemory||!this.data.settings.personalContext)return base;
+    const world=this.innerWorld();
     const profile=this.personalityProfile();
-    return base+'\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
+    return base+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
       '. Ценности: '+profile.character.values.join(', ')+
       '. Модель настроения (стиль ответа, не чувства): '+profile.emotionalModel.mood+
       '. История и опыт отражены в подтверждённых предпочтениях и уроках. '+
