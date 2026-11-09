@@ -4,7 +4,7 @@
  * No networking, training, automatic source deletion, or arbitrary command execution.
  */
 import {randomUUID,createHash} from 'node:crypto';
-import {existsSync,mkdirSync,readFileSync,renameSync,writeFileSync} from 'node:fs';
+import {copyFileSync,existsSync,mkdirSync,readFileSync,renameSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {keywords} from './rag.ts';
 import {graphLinks} from './rag-advanced.ts';
@@ -64,13 +64,22 @@ function blank():Store{return{version:1,goals:[],facts:[],gaps:[],timeline:[],no
   dreams:[],traces:[],metrics:{scans:0,factsObserved:0,duplicateGroups:0,links:0},
   lastScanAt:null,lastError:null,fingerprint:''};}
 function read(path:string):Store{
-  if(!existsSync(path))return blank();
-  const value=JSON.parse(readFileSync(path,'utf8')) as Store;
-  if(value.version!==1||!Array.isArray(value.goals)||!Array.isArray(value.facts)||
-    !Array.isArray(value.gaps)||!Array.isArray(value.timeline)||!Array.isArray(value.traces)||
-    !Array.isArray(value.nodes)||!Array.isArray(value.edges)||!Array.isArray(value.dreams)||
-    !value.metrics)throw new Error('Некорректный файл Cognitive Evolution');
-  return value;
+  if(!existsSync(path)&&!existsSync(path+'.bak'))return blank();
+  const parse=(candidate:string)=>{
+    const value=JSON.parse(readFileSync(candidate,'utf8')) as Store;
+    if(value.version!==1||!Array.isArray(value.goals)||!Array.isArray(value.facts)||
+      !Array.isArray(value.gaps)||!Array.isArray(value.timeline)||!Array.isArray(value.traces)||
+      !Array.isArray(value.nodes)||!Array.isArray(value.edges)||!Array.isArray(value.dreams)||
+      !value.metrics)throw new Error('Некорректный файл Cognitive Evolution');
+    return value;
+  };
+  try{return parse(path);}
+  catch(primaryError){
+    if(existsSync(path+'.bak')){
+      try{return parse(path+'.bak');}catch{ /* preserve both damaged files for diagnostics */ }
+    }
+    throw primaryError;
+  }
 }
 export function assessEvidence(question:string,sources:Evidence[]):EvidenceAssessment{
   const terms=keywords(question,24).slice(0,14);
@@ -116,7 +125,12 @@ export class CognitiveCore{
   private now(){return (this.deps.now?.()??new Date()).toISOString();}
   private save(){
     const path=this.path+'.'+randomUUID()+'.tmp';
-    writeFileSync(path,JSON.stringify(this.data,null,2),{mode:0o600,encoding:'utf8'});
+    writeFileSync(path,JSON.stringify(this.data),{mode:0o600,encoding:'utf8'});
+    // Keep one verified previous generation; do not overwrite backup with a corrupt primary.
+    if(existsSync(this.path)){
+      try{read(this.path);copyFileSync(this.path,this.path+'.bak');}
+      catch{ /* retain last valid backup */ }
+    }
     renameSync(path,this.path);
   }
   private modify<T>(fn:()=>T|Promise<T>):Promise<T>{
