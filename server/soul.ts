@@ -164,6 +164,40 @@ export class SoulEngine {
   qualityReport(){
     return feedbackQuality(this.data.feedbackEvents??[]);
   }
+  conversationPlan(now=new Date()){
+    const d=this.data;
+    const pending=d.settings.initiativeEnabled?
+      d.initiatives.filter(i=>i.status==='new'&&i.sourceIds.length>0).slice(0,3):[];
+    const lessons=d.settings.personalContext?
+      d.lessons.filter(l=>l.confirmed&&!BEHAVIOR_INJECTION.test(l.text)).slice(0,3):[];
+    const interests=d.settings.personalContext?
+      d.preferences.filter(p=>p.status==='confirmed'&&!BEHAVIOR_INJECTION.test(p.text)).slice(0,4):[];
+    const feedback=d.feedbackEvents??[];
+    const recentNegative=feedback.filter(f=>f.rating==='negative'&&
+      Number.isFinite(Date.parse(f.at))&&now.getTime()-Date.parse(f.at)<7*86400000&&
+      now.getTime()>=Date.parse(f.at)).length;
+    const focus=recentNegative>=2?'точность и исправление ошибок':
+      pending.length?'проверка полезных инициатив':
+      interests.length?'интересы и предпочтения владельца':'текущая задача владельца';
+    return {focus,mood:recentNegative>=2?'внимательный':'спокойный',
+      initiatives:pending.map(i=>({id:i.id,title:i.title,reason:i.reason,sourceIds:i.sourceIds})),
+      interests:interests.map(i=>({text:i.text,source:i.source})),
+      lessons:lessons.map(l=>({text:l.text,source:l.source})),
+      curiosity:pending.length?'Уточнить, хочет ли владелец обсудить конкретное предложение':
+        'При необходимости задать один уточняющий вопрос по текущей задаче',
+      limits:'Не начинать разговор без запроса пользователя или разрешённого уведомления. Не выдавать предположения за факты.',
+      generatedAt:now.toISOString()};
+  }
+  conversationGuidance(){
+    const plan=this.conversationPlan();
+    const items=plan.initiatives.slice(0,2).map(i=>
+      i.title.slice(0,100)+' (источники: '+i.sourceIds.join(',').slice(0,120)+')');
+    return 'План общения: фокус — '+plan.focus+
+      '. Отвечай естественно, без шаблонного приветствия; учитывай контекст и паузы, не имитируя человеческих чувств. '+
+      'Сначала решай запрос владельца, не навязывай вопросы. '+
+      (items.length?'Если уместно, кратко предложи обсудить одну подтверждённую повторениями тему: '+items.join('; ')+'. ':'')+
+      'Не утверждай, что выполняла действия или думала в фоне, если нет подтверждённого результата.';
+  }
   growthObjectives(){
     const d=this.data;
     const completed=d.metrics.completedTasks;
