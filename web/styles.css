@@ -335,3 +335,9 @@
  @keyframes brainNodeReveal{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
  @keyframes brainLinkReveal{from{opacity:0}to{opacity:1}}
 }
+
+/* Large graph navigation. */
+.brain-map-navigation{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.brain-map-navigation button{border:1px solid #51402d;background:#241e19;color:#eed0a0;border-radius:9px;min-width:34px;min-height:34px;padding:6px 11px;font-size:13px}
+.brain-map-navigation span{color:var(--muted);font-size:11px}
+#brain-map-svg{touch-action:none;user-select:none}
