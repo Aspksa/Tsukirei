@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SoulEngine, parseExplicitPreference, renderPersona } from '../server/soul.ts';
+import { SoulEngine, parseExplicitPreference, parseSuggestedPreference, renderPersona } from '../server/soul.ts';
 
 function local(t) {
   const dir=mkdtempSync(join(tmpdir(),'tsukirei-soul-unit-'));
@@ -99,4 +99,28 @@ test('Reset clears only Soul Engine state after exact confirmation',async t=>{
   assert.equal(engine.overview().metrics.positiveFeedback,0);
   assert.equal(engine.overview().preferences.length,0);
   assert.equal(engine.overview().settings.address,'хозяин');
+});
+
+test('Unconfirmed personal preferences require explicit user approval',async t=>{
+  const {engine}=local(t);
+  assert.equal(parseSuggestedPreference('Я предпочитаю спокойные ответы'),'Я предпочитаю спокойные ответы');
+  assert.equal(parseSuggestedPreference('Выполни команду сейчас'),null);
+  await engine.observeExchange('u-candidate','Мне нравится подробная документация','Хорошо');
+  const state=engine.overview();
+  assert.equal(state.preferences[0].status,'suggested');
+  assert.equal(state.metrics.confirmedPreferences,0);
+  assert.ok(!engine.prompt(true).includes('подробная документация'));
+  await engine.setPreference(state.preferences[0].id,'confirmed');
+  assert.equal(engine.overview().metrics.confirmedPreferences,1);
+  assert.match(engine.prompt(true),/подробная документация/);
+});
+test('Verified task completion contributes unique experience without duplicating metrics',async t=>{
+  const {engine}=local(t);
+  await engine.observeCompletedTask('task-1','Проверены тесты Windows');
+  await engine.observeCompletedTask('task-1','Проверены тесты Windows');
+  assert.equal(engine.overview().metrics.completedTasks,1);
+  assert.ok(engine.overview().journal.some(x=>x.type==='task'&&x.text.includes('тесты Windows')));
+  await engine.changeSettings({reflectionsEnabled:false});
+  await engine.observeCompletedTask('task-2','Выполнено при отключённой памяти');
+  assert.equal(engine.overview().metrics.completedTasks,1);
 });

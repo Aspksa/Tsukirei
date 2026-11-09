@@ -46,6 +46,7 @@
     one('soul-preference-count').textContent=String(m.confirmedPreferences);
     one('soul-lessons-count').textContent=String(m.lessons);
     one('soul-initiative-count').textContent=String(m.proposals);
+    one('soul-task-count').textContent=String(m.completedTasks||0);
     one('soul-journal-total').textContent=data.journal.length+' событий';
     // Preserve edited input while the form has keyboard focus.
     if(!one('soul-settings-form').contains(document.activeElement)){
@@ -79,7 +80,7 @@
     const journal=one('soul-journal');journal.replaceChildren();
     if(!data.journal.length)empty(journal,'Дневник появится после первого обмена и обратной связи.');
     const types={preference:'Предпочтение',feedback:'Отзыв',reflection:'Урок',
-      initiative:'Инициатива',setting:'Настройка'};
+      initiative:'Инициатива',setting:'Настройка',task:'Выполненная задача'};
     for(const item of data.journal.slice(0,50)){
       journal.append(entry(types[item.type]||'Событие',item.text,date(item.at)));
     }

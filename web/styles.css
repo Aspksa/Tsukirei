@@ -75,7 +75,7 @@
 .soul-identity h2 em{font-weight:400;color:#c9a571}
 .soul-identity p{font-size:12px;line-height:1.8;color:#ada0a2}
 .soul-emblem{width:100px;height:100px;flex:0 0 100px;border:1px solid #5f4938;border-radius:50%;background:radial-gradient(circle,#675137 0%,#281e20 42%,#100d16 76%);box-shadow:0 0 50px #9b733528,inset 0 0 26px #a47a2330;display:grid;place-items:center;font-size:44px;color:#e5c189}
-.soul-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.soul-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:10px}
 .soul-metric{padding:17px 14px;display:flex;flex-direction:column;gap:9px}
 .soul-metric small{color:#bfa172;font-size:9px;letter-spacing:1px}
 .soul-metric strong{font-size:29px;color:#e9d0a4;font-weight:500;font-variant-numeric:tabular-nums}

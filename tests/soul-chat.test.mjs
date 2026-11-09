@@ -40,10 +40,16 @@ test('Soul Engine chat is personalized and uses validated lessons with no extra 
       body:body===undefined?undefined:JSON.stringify(body)});
     return{status:response.status,data:await response.json()};
   };
+  const task=await api('/api/tasks','POST',{title:'Проверить сборку Tsukirei'});
+  assert.equal(task.status,201);
+  assert.equal((await api('/api/tasks/'+task.data.task.id,'PATCH',{done:true})).status,200);
+  assert.equal((await api('/api/tasks/'+task.data.task.id,'PATCH',{done:true})).status,200);
   const initial=await api('/api/soul');
   assert.equal(initial.status,200);
   assert.equal(initial.data.settings.address,'хозяин');
   assert.equal(initial.data.metrics.chatsObserved,0);
+  assert.equal(initial.data.metrics.completedTasks,1);
+  assert.ok(initial.data.journal.some(x=>x.type==='task'));
   assert.equal(requests.length,0,'Identity loads without Cloud.ru');
   const settings=await api('/api/settings','POST',{model:'demo/model',apiKey:'secret-local-test-key'});
   assert.equal(settings.status,200);
