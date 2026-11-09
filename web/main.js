@@ -99,6 +99,54 @@ function go(page) {
 }
 let brainLoading=false;
 let brainGrowthPeriod='30';
+function renderBrainGrowthChart(records,period){
+ const svg=el('brain-growth-svg'),wrap=el('brain-growth-chart'),caption=el('brain-chart-caption');
+ svg.replaceChildren();
+ const timestamps=records.map(item=>Date.parse(item.at)).filter(Number.isFinite);
+ if(!timestamps.length){
+  wrap.setAttribute('aria-label','За выбранный период нет событий для графика');
+  caption.textContent='Нет событий за выбранный период. Выберите другой период или дождитесь новых записей.';
+  return;
+ }
+ const now=Date.now(),daily=period!=='all',day=86400000;
+ const min=daily?now-Number(period)*day:Math.min(...timestamps);
+ const max=daily?now:Math.max(now,Math.max(...timestamps));
+ const bins=daily?Number(period):Math.min(24,Math.max(1,Math.ceil((max-min)/day)));
+ const totals=Array.from({length:bins},()=>0);
+ for(const t of timestamps){
+  if(t<min||t>max)continue;
+  const index=Math.min(bins-1,Math.floor((t-min)/Math.max(1,max-min)*bins));
+  totals[index]++;
+ }
+ const peak=Math.max(1,...totals),width=720,height=220,left=32,right=18,top=24,bottom=34;
+ const chartW=width-left-right,chartH=height-top-bottom,step=chartW/bins;
+ const NS='http://www.w3.org/2000/svg';
+ const element=(tag,attributes,text)=>{
+  const node=document.createElementNS(NS,tag);
+  for(const [key,value] of Object.entries(attributes))node.setAttribute(key,String(value));
+  if(text!==undefined)node.textContent=text;
+  svg.append(node);return node;
+ };
+ for(let row=0;row<=3;row++){
+  const y=top+chartH*row/3;
+  element('line',{x1:left,y1:y,x2:width-right,y2:y,class:'brain-chart-grid'});
+  element('text',{x:2,y:y+4,class:'brain-chart-axis'},String(Math.round(peak*(3-row)/3)));
+ }
+ totals.forEach((count,index)=>{
+  const h=count/peak*chartH;
+  const x=left+index*step+Math.min(4,step*.12),barW=Math.max(1,step-Math.min(8,step*.24));
+  const bar=element('rect',{x,y:top+chartH-h,width:barW,height:Math.max(0,h),rx:Math.min(5,barW/2),class:count?'brain-chart-bar':'brain-chart-bar-empty'});
+  const from=new Date(min+(max-min)*index/bins).toLocaleDateString('ru-RU');
+  const to=new Date(min+(max-min)*(index+1)/bins).toLocaleDateString('ru-RU');
+  const title=document.createElementNS(NS,'title');title.textContent=from+' — '+to+': '+count+' событий';bar.append(title);
+ });
+ element('text',{x:left,y:height-7,class:'brain-chart-axis'},new Date(min).toLocaleDateString('ru-RU'));
+ element('text',{x:width-right,y:height-7,'text-anchor':'end',class:'brain-chart-axis'},new Date(max).toLocaleDateString('ru-RU'));
+ const total=totals.reduce((a,b)=>a+b,0);
+ const description='Событий: '+total+'. Максимум за интервал: '+Math.max(...totals)+'. Интервалов: '+bins+'.';
+ wrap.setAttribute('aria-label','График истории мозга. '+description);
+ caption.textContent=description+' Столбцы показывают число событий, а не уровень интеллекта.';
+}
 async function refreshBrainGrowth(){
   const summary=el('brain-growth-summary');
   const events=el('brain-growth-events');
@@ -116,6 +164,7 @@ async function refreshBrainGrowth(){
       return Number.isFinite(timestamp)&&(days===Infinity||
         timestamp<=now&&timestamp>=now-days*86400000);
     });
+    renderBrainGrowthChart(visibleRecords,brainGrowthPeriod);
     const pending=Array.isArray(queue.items)?queue.items:[];
     const candidateCount=Array.isArray(evidence.items)?
       evidence.items.reduce((sum,item)=>sum+(Array.isArray(item.candidates)?item.candidates.length:0),0):0;
@@ -148,6 +197,7 @@ async function refreshBrainGrowth(){
       review.append(line);
     }
   }catch(error){
+    renderBrainGrowthChart([],brainGrowthPeriod);
     summary.textContent='Не удалось загрузить историю: '+(error.message||'ошибка');
     events.replaceChildren();review.textContent='Проверка недоступна.';
   }
