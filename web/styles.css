@@ -401,3 +401,16 @@
 .chat-copy-button:hover,.chat-copy-button:focus-visible{border-color:#7e6543;color:#f3d6a5;background:#362c25}
 .chat-compose textarea{resize:none;overflow-y:auto}
 @media(max-width:760px){.chat-jump{bottom:10px}.chat-copy-button{min-height:34px;padding:8px 10px}}
+
+/* Moonlit Conversation v3: local history search */
+.chat-search[hidden]{display:none!important}
+.chat-search{display:flex;align-items:center;gap:8px;padding:11px 16px;background:#17181e;border-bottom:1px solid #44382b;min-width:0}
+.chat-search input{flex:1;min-width:0;background:#101116;border:1px solid #66523b;color:#f4eee4;border-radius:10px;padding:10px 12px;font:inherit;font-size:12px}
+.chat-search input:focus-visible{outline:2px solid #e2bc7d;outline-offset:2px}
+.chat-search span{color:#b7ab9c;font-size:10px;white-space:nowrap}
+.chat-search button{width:33px;height:33px;flex-shrink:0;border-radius:9px;border:1px solid #5a4835;background:#242026;color:#e4c48d;cursor:pointer}
+.chat-search button:disabled{opacity:.35;cursor:default}
+.chat-search button:not(:disabled):hover{background:#413021}
+.chat-thread mark{background:#8c6b32;color:#fff8eb;border-radius:3px;padding:1px 0}
+.chat-thread mark.current{background:#e4c27c;color:#21180d;box-shadow:0 0 0 2px #e4c27c55}
+@media(max-width:390px){.chat-search{gap:5px;padding:9px}.chat-search span{font-size:9px}.chat-search button{width:29px}}

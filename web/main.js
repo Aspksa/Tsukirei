@@ -481,6 +481,39 @@ function renderTasks() {
   });
 }
 let chatScrollPinned=false;
+let chatSearchMatches=[],chatSearchIndex=0;
+function applyChatSearch(){
+ const query=el('chat-search-input').value.trim().toLocaleLowerCase('ru-RU');
+ const nodes=[...el('chat-thread').querySelectorAll('.message p')];
+ chatSearchMatches=[];
+ nodes.forEach(node=>{
+  const original=node.textContent;node.replaceChildren();
+  if(!query){node.textContent=original;return}
+  const lower=original.toLocaleLowerCase('ru-RU');let offset=0,at;
+  while((at=lower.indexOf(query,offset))!==-1){
+   node.append(document.createTextNode(original.slice(offset,at)));
+   const mark=document.createElement('mark');mark.textContent=original.slice(at,at+query.length);
+   node.append(mark);chatSearchMatches.push(mark);offset=at+query.length;
+  }
+  node.append(document.createTextNode(original.slice(offset)));
+ });
+ if(chatSearchIndex>=chatSearchMatches.length)chatSearchIndex=0;
+ updateChatSearchSelection();
+}
+function updateChatSearchSelection(){
+ chatSearchMatches.forEach((mark,i)=>mark.classList.toggle('current',i===chatSearchIndex));
+ const count=el('chat-search-count'),query=el('chat-search-input').value.trim();
+ count.textContent=!query?'Введите запрос':chatSearchMatches.length?(chatSearchIndex+1)+' из '+chatSearchMatches.length:'Совпадений нет';
+ el('chat-search-prev').disabled=!chatSearchMatches.length;
+ el('chat-search-next').disabled=!chatSearchMatches.length;
+ if(chatSearchMatches.length&&query)chatSearchMatches[chatSearchIndex].scrollIntoView({block:'center',behavior:'instant'});
+}
+function moveChatSearch(direction){
+ if(!chatSearchMatches.length)return;
+ chatSearchIndex=(chatSearchIndex+direction+chatSearchMatches.length)%chatSearchMatches.length;
+ updateChatSearchSelection();
+}
+
 function updateChatJump(){
  const list=el('chat-thread'),jump=el('chat-jump');
  const distant=list.scrollHeight-list.scrollTop-list.clientHeight>110;
@@ -494,6 +527,7 @@ function resizeChatInput(){
 }
 function renderChat() {
   const list = el('chat-thread');
+  const previousScroll=list.scrollTop,previousHeight=list.scrollHeight;
   list.replaceChildren();
   if (!viewState.messages.length) {
     const empty = escapeNotNeeded('div', 'chat-welcome');
@@ -560,8 +594,11 @@ function renderChat() {
     });
     list.append(details);
   }
-  if(!chatScrollPinned || !list.dataset.rendered)list.scrollTop=list.scrollHeight;
-  list.dataset.rendered='true';updateChatJump();
+  if(chatScrollPinned&&list.dataset.rendered)list.scrollTop=Math.max(0,previousScroll+list.scrollHeight-previousHeight);
+  else list.scrollTop=list.scrollHeight;
+  list.dataset.rendered='true';
+  if(!el('chat-search').hidden)applyChatSearch();
+  updateChatJump();
 }
 function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
 
@@ -631,6 +668,19 @@ function toggleChat(open) {
   else { el('chat-toggle').focus(); }
 }
 el('chat-toggle').addEventListener('click', () => toggleChat(el('chat-panel').hidden));
+el('chat-search-toggle').addEventListener('click',()=>{
+ const search=el('chat-search'),open=search.hidden;search.hidden=!open;
+ el('chat-search-toggle').setAttribute('aria-expanded',String(open));
+ if(open){el('chat-search-input').focus();applyChatSearch()}
+ else{el('chat-search-input').value='';applyChatSearch();el('chat-input').focus()}
+});
+el('chat-search-input').addEventListener('input',()=>{chatSearchIndex=0;applyChatSearch()});
+el('chat-search-prev').addEventListener('click',()=>moveChatSearch(-1));
+el('chat-search-next').addEventListener('click',()=>moveChatSearch(1));
+el('chat-search-input').addEventListener('keydown',event=>{
+ if(event.key==='Enter'){event.preventDefault();moveChatSearch(event.shiftKey?-1:1)}
+ if(event.key==='Escape'){event.stopPropagation();el('chat-search-toggle').click()}
+});
 el('chat-expand').addEventListener('click',()=>{
  const expanded=el('chat-panel').classList.toggle('chat-expanded');
  el('chat-expand').setAttribute('aria-pressed',String(expanded));
