@@ -60,12 +60,15 @@ export async function retrieveRag(
   if(database&&embedding){
     if(useIndex&&vectorModel&&database.ragIndexVector){
       vectors=await database.ragIndexVector(embedding,vectorModel,50);
-    }else if(!useIndex){
-      const matches=await database.searchKnowledge('',embedding,Math.min(40,Math.max(10,limit*4)));
-      // Manually imported knowledge vectors may have no model provenance.
-      // A configured query embedding may be fused only with the matching model.
-      vectors=matches.filter(value=>!vectorModel||value.embeddingModel===vectorModel).map(knowledgeSource);
     }
+    // Preserve historical manually saved pgvector knowledge, including embeddings
+    // created before the incremental RAG index was introduced.
+    const existing=await database.searchKnowledge('',embedding,Math.min(40,Math.max(10,limit*4)));
+    const retained=existing.filter(value=>!vectorModel||value.embeddingModel===vectorModel)
+      .map(knowledgeSource);
+    const merged=new Map<string,RagSource>();
+    for(const row of [...vectors,...retained])merged.set(row.kind+':'+row.id+':'+(row.part??0),row);
+    vectors=[...merged.values()];
   }
   const ranked=rankSources(query,sources,Math.min(25,Math.max(10,limit*3)));
   if (embedding && vectors.length) return {
