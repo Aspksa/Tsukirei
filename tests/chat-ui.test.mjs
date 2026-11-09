@@ -37,3 +37,13 @@ test('chat v2 includes message copy, scroll affordance and expanding composer',(
  assert.match(js,/chatScrollPinned/);
  assert.match(css,/\.chat-jump\[hidden\]\{display:none\}/);
 });
+
+test('chat v3 search remains local and renders safe DOM highlights',()=>{
+ for(const id of ['chat-search','chat-search-toggle','chat-search-input','chat-search-count','chat-search-prev','chat-search-next'])
+   assert.ok(html.includes('id="'+id+'"'),id);
+ assert.match(js,/function applyChatSearch\(/);
+ assert.match(js,/document\.createTextNode\(original\.slice/);
+ assert.match(js,/mark\.textContent=original\.slice/);
+ assert.match(js,/previousScroll\+list\.scrollHeight-previousHeight/);
+ assert.match(css,/\.chat-search\[hidden\]\{display:none!important\}/);
+});
