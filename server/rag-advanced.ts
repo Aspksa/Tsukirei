@@ -11,7 +11,7 @@ export type SourceDoc = {
 export type GraphLink = {from:string; relation:string; to:string; evidence:string};
 export function graphLinks(text:string):GraphLink[] {
   const links:GraphLink[]=[];
-  const pattern=/([\p{L}\p{N}_-]{3,48})\s+(использует|зависит\s+от|связан[аоы]?\s+с|применяет)\s+([\p{L}\p{N}_.-]{3,48})/giu;
+  const pattern=/([\p{L}\p{N}_-]{3,48})\s+(использует|зависит\s+от|связан[аоы]?\s+с|применяет)\s+([\p{L}\p{N}_-]{3,48}(?:\.[\p{L}\p{N}_-]{1,24})?)/giu;
   for(const match of text.matchAll(pattern)) {
     const [whole,rawFrom,relation,rawTo]=match;
     const from=rawFrom.toLowerCase(),to=rawTo.toLowerCase();
