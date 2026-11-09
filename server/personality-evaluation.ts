@@ -25,7 +25,7 @@ export function feedbackQuality(events:FeedbackEvent[],now=new Date()){
   const enough=current.count>=5&&previous.count>=5;
   const delta=enough?current.positiveRate!-previous.positiveRate!:null;
   return {generatedAt:now.toISOString(),current,previous,deltaPercentagePoints:delta,
-    trend:!enough?'insufficient-data':delta!>=10?'improving':delta!<=-10?'declining':'stable',
+    trend:!enough?'insufficient-data':(delta as number)>=10?'improving':(delta as number)<=-10?'declining':'stable',
     minimumFeedbackPerWindow:5,method:'Доля положительных оценок в двух 30-дневных окнах',
     caveat:'Оценки пользователя не доказывают фактическую правильность ответов.'};
 }
