@@ -12,6 +12,7 @@
   <script src="/soul.js" defer></script>
   <script src="/living.js" defer></script>
   <script src="/cognition.js" defer></script>
+  <script src="/supermind.js" defer></script>
 </head>
 <body>
   <svg class="icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -20,6 +21,7 @@
     <symbol id="i-memory" viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-7.8 1.3A5 5 0 0 0 3 13a4.5 4.5 0 0 0 5 7 4.5 4.5 0 0 0 4-3 4.5 4.5 0 0 0 4 3 4.5 4.5 0 0 0 5-7 5 5 0 0 0-1.2-8.7A4 4 0 0 0 12 3z"/><path d="M12 3v14m-6-9 3 2m9-2-3 2M6 15l3-1m9 1-3-1"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8m2 2h3M8 16h9"/></symbol>
     <symbol id="i-agents" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 3v4M9 3h6M8 12h.01M16 12h.01M9 16h6M2 11v4m20-4v4"/></symbol>
+    <symbol id="i-supermind" viewBox="0 0 24 24"><path d="M12 21s-8-4.3-8-11a4.5 4.5 0 0 1 8-2 4.5 4.5 0 0 1 8 2c0 6.7-8 11-8 11z"/><path d="m9 12 2 2 4-4"/></symbol>
     <symbol id="i-cognition" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v6m0 8v6M2 12h6m8 0h6M5 5l4 4m6 6 4 4M19 5l-4 4M9 15l-4 4"/></symbol>
     <symbol id="i-living" viewBox="0 0 24 24"><path d="M12 22v-10m0 5c-5 0-8-3-8-8 5 0 8 3 8 8Zm0-4c0-5 3-8 8-8 0 5-3 8-8 8Z"/></symbol>
     <symbol id="i-soul" viewBox="0 0 24 24"><path d="M12 2 14 8l6 4-6 4-2 6-2-6-6-4 6-4z"/><path d="m19 2 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></symbol>
@@ -47,6 +49,7 @@
         <button class="nav-button" data-page="soul" data-label="Личность" aria-label="Личность"><svg><use href="#i-soul"/></svg></button>
         <button class="nav-button" data-page="living" data-label="Развитие" aria-label="Развитие"><svg><use href="#i-living"/></svg></button>
         <button class="nav-button" data-page="cognition" data-label="Мышление" aria-label="Мышление"><svg><use href="#i-cognition"/></svg></button>
+        <button class="nav-button" data-page="supermind" data-label="Душа и сверхразум" aria-label="Душа и сверхразум"><svg><use href="#i-supermind"/></svg></button>
       </nav>
       <div class="nav-bottom">
         <button class="nav-button" data-page="settings" data-label="Настройки" aria-label="Настройки"><svg><use href="#i-settings"/></svg></button>
@@ -60,7 +63,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v1.1</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v1.2</span></div>
       </header>
 
       <main class="main">
@@ -451,6 +454,133 @@
                 <div class="list-heading"><h2>30 · Активность обработки</h2><span id="cog-trace-meta">наблюдаемые этапы</span></div>
                 <p class="cog-hint">Видны действительные этапы сканирования, время и количество обработанных источников. Внутренние скрытые рассуждения модели здесь не отображаются.</p>
                 <div id="cog-traces" class="cog-list cog-scroll"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+
+        <section class="page" id="page-supermind" hidden aria-labelledby="sm-title">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow"><span class="small-line"></span> ETERNAL SOUL / HYPER MIND · v1.2</div>
+              <h1 id="sm-title">Душа и <em>сверхразум.</em></h1>
+              <p>Постоянный характер, история общения, исследовательские гипотезы и проверяемый опыт.</p>
+            </div>
+            <span class="date-chip" id="sm-state">Локальное ядро</span>
+          </div>
+          <div class="sm-layout">
+            <div class="sm-main">
+              <div class="glass-panel sm-identity">
+                <div class="sm-sigil" id="sm-sigil" aria-hidden="true">✦</div>
+                <div class="sm-identity-content">
+                  <span class="panel-kicker">49 · ЛИЧНОСТЬ / 53 · ВЫРАЖЕНИЕ</span>
+                  <h2>Цукирэй — <em>девятихвостая кицунэ</em></h2>
+                  <p id="sm-expression">Спокойное ожидание</p>
+                  <p class="sm-small">Состояние анимации зависит от событий приложения. Оно не означает настоящих чувств.</p>
+                </div>
+                <button class="ghost-button" id="sm-sync" type="button">Обновить историю</button>
+              </div>
+              <div class="sm-metrics">
+                <div class="glass-panel sm-metric"><small>50 · АВТОБИОГРАФИЯ</small><strong id="sm-events">0</strong><span>реальных событий</span></div>
+                <div class="glass-panel sm-metric"><small>55 · НЕПРЕРЫВНОСТЬ</small><strong id="sm-revisions">0</strong><span>версий характера</span></div>
+                <div class="glass-panel sm-metric"><small>59 · ИССЛЕДОВАНИЯ</small><strong id="sm-inquiries">0</strong><span>проверяемых вопросов</span></div>
+                <div class="glass-panel sm-metric"><small>63 · МУДРОСТЬ</small><strong id="sm-wisdom-count">0</strong><span>одобренных принципов</span></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>54 · История личности</h2><span>Только события из архива</span></div>
+                <p class="sm-note" id="sm-narrative">История сформируется после синхронизации.</p>
+                <div id="sm-life" class="sm-list sm-scroll"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>57 · Общее рабочее пространство</h2><span>Цели, знания, навыки и вопросы</span></div>
+                <div id="sm-workspace" class="sm-workspace"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>59 · Научное рассуждение</h2><span>2–4 опровержимые гипотезы</span></div>
+                <p class="sm-note">Цукирэй подготовит варианты проверок. Пока ты не запишешь результат, гипотеза останется непроверенной. Никакого запуска команд.</p>
+                <form id="sm-inquiry-form" class="sm-form">
+                  <label for="sm-question">Какую проблему исследуем?</label>
+                  <textarea id="sm-question" maxlength="250" rows="2" required placeholder="Почему новый поиск работает медленнее старого?"></textarea>
+                  <button class="gold-button" type="submit">Создать план исследования</button>
+                </form>
+                <div class="sm-list" id="sm-inquiry-list"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>58 · Что, если? / 60 · Сравнение стратегий</h2><span>Прозрачный расчёт</span></div>
+                <p class="sm-note">Для каждого варианта введи оценки от 0 до 10: качество выше — лучше, усилия/стоимость/риск выше — хуже. Оценки субъективны и не являются измерениями.</p>
+                <form id="sm-strategy-form" class="sm-form">
+                  <label for="sm-strategy-question">Задача</label>
+                  <input id="sm-strategy-question" required maxlength="240" placeholder="Как лучше оптимизировать память?">
+                  <div class="sm-strategy-options">
+                    <fieldset>
+                      <legend>Вариант A</legend>
+                      <label>Название<input id="sm-opt-a-name" required maxlength="100" value="Локальный алгоритм"></label>
+                      <div class="sm-scores">
+                        <label>Качество<input id="sm-opt-a-quality" type="number" min="0" max="10" value="7" required></label>
+                        <label>Усилия<input id="sm-opt-a-effort" type="number" min="0" max="10" value="3" required></label>
+                        <label>Цена<input id="sm-opt-a-cost" type="number" min="0" max="10" value="1" required></label>
+                        <label>Риск<input id="sm-opt-a-risk" type="number" min="0" max="10" value="2" required></label>
+                      </div>
+                      <label>Предположение<input id="sm-opt-a-assumption" maxlength="220" required value="Работает без внешних запросов и требует локальных тестов"></label>
+                    </fieldset>
+                    <fieldset>
+                      <legend>Вариант B</legend>
+                      <label>Название<input id="sm-opt-b-name" required maxlength="100" value="Cloud.ru анализ"></label>
+                      <div class="sm-scores">
+                        <label>Качество<input id="sm-opt-b-quality" type="number" min="0" max="10" value="9" required></label>
+                        <label>Усилия<input id="sm-opt-b-effort" type="number" min="0" max="10" value="5" required></label>
+                        <label>Цена<input id="sm-opt-b-cost" type="number" min="0" max="10" value="6" required></label>
+                        <label>Риск<input id="sm-opt-b-risk" type="number" min="0" max="10" value="4" required></label>
+                      </div>
+                      <label>Предположение<input id="sm-opt-b-assumption" maxlength="220" required value="Требует отдельного разрешения и контроля расходов"></label>
+                    </fieldset>
+                  </div>
+                  <button type="submit" class="gold-button">Сравнить и смоделировать</button>
+                </form>
+                <div id="sm-strategies" class="sm-list"></div>
+              </div>
+            </div>
+            <aside class="sm-side">
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>52 · Ценности</h2></div>
+                <p class="sm-note">Неизменяемые базовые принципы. Характер можно адаптировать, безопасность — нет.</p>
+                <div class="sm-list" id="sm-values"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>51 · Внутренний мир</h2></div>
+                <p class="sm-note">Реальные текущие цели, пробелы и интересы — без придуманных желаний.</p>
+                <div id="sm-inner" class="sm-list"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>56 · Понимание намерений</h2></div>
+                <p class="sm-note">Местная приблизительная классификация текста, а не чтение мыслей.</p>
+                <form id="sm-intent-form" class="sm-form">
+                  <label for="sm-intent-input" class="sr-only">Сообщение</label>
+                  <input id="sm-intent-input" maxlength="1500" required placeholder="У меня снова чёрный экран">
+                  <button class="ghost-button" type="submit">Оценить намерение</button>
+                </form>
+                <div id="sm-intent-result" class="sm-note"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>62 · Программа обучения</h2></div>
+                <div id="sm-curriculum" class="sm-list"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>63 · Проверенные принципы</h2></div>
+                <p class="sm-note">Сохраняются только из гипотез с записанной проверкой и отдельным одобрением владельца.</p>
+                <div id="sm-wisdom" class="sm-list"></div>
+              </div>
+              <div class="glass-panel sm-section">
+                <div class="list-heading"><h2>64 · Контролёр ресурсов</h2></div>
+                <div id="sm-governor" class="sm-list"></div>
+                <form id="sm-settings-form" class="sm-form">
+                  <label class="sm-check"><input id="sm-enabled" type="checkbox" checked> Автоматически обновлять историю в фоне</label>
+                  <label class="sm-check"><input id="sm-expression-enabled" type="checkbox" checked> Отображать выразительное состояние</label>
+                  <label for="sm-depth">Лимит этапов локального анализа (1–5)</label>
+                  <input type="number" id="sm-depth" min="1" max="5" value="3">
+                  <button class="ghost-button" type="submit">Сохранить ограничения</button>
+                </form>
               </div>
             </aside>
           </div>
