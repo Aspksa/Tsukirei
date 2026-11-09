@@ -271,6 +271,8 @@ export class SoulEngine {
     })),policy:'Рекомендации шаблонные и локальные; источники указывают на сигналы проблемы, а не на доказанное решение. Действия не запускаются.'};
   }
   reflectionGoalReport(){
+    if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled)
+      return {lastRunAt:null,history:[],actionPlans:[],policy:'Персональный контекст или рефлексия отключены'};
     const goals=this.data.reflectionGoals??{lastRunAt:null,history:[]};
     return {lastRunAt:goals.lastRunAt,history:goals.history.slice(0,30),
       actionPlans:this.reflectionActionPlans().items,
@@ -278,7 +280,7 @@ export class SoulEngine {
   }
   async reflectOnGoals(now=new Date()){
     return this.modify(()=>{
-      if(!this.data.settings.reflectionsEnabled)return {created:0,reason:'Рефлексия отключена'};
+      if(!this.data.settings.reflectionsEnabled||!this.data.settings.personalContext)return {created:0,reason:'Рефлексия или персональный контекст отключены'};
       const state:NonNullable<SoulData['reflectionGoals']>=this.data.reflectionGoals??{lastRunAt:null,history:[]};
       const last=Date.parse(state.lastRunAt??'');
       if(Number.isFinite(last)&&now.getTime()-last<24*86400000)
@@ -312,13 +314,15 @@ export class SoulEngine {
     });
   }
   outreachInbox(){
+    if(!this.data.settings.personalContext||!this.data.settings.initiativeEnabled||!this.data.settings.reflectionsEnabled)
+      return {items:[],policy:'Персональный контекст или инициативы отключены'};
     return {items:(this.data.outreach?.items??[]).filter(i=>i.status==='pending').slice(0,10),
       policy:'Предложения появляются только внутри приложения при открытии; внешние сообщения не отправляются.'};
   }
   async prepareOutreach(now=new Date()){
     return this.modify(()=>{
-      if(!this.data.settings.initiativeEnabled||!this.data.settings.reflectionsEnabled)
-        return {created:0,reason:'Инициативы или рефлексия отключены'};
+      if(!this.data.settings.initiativeEnabled||!this.data.settings.reflectionsEnabled||!this.data.settings.personalContext)
+        return {created:0,reason:'Инициативы, рефлексия или персональный контекст отключены'};
       const state:NonNullable<SoulData['outreach']>=this.data.outreach??{lastPreparedAt:null,items:[]};
       const last=Date.parse(state.lastPreparedAt??'');
       if(Number.isFinite(last)&&now.getTime()-last<24*86400000)return {created:0,reason:'Проверка уже проводилась'};
