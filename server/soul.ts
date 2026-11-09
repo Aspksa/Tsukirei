@@ -34,6 +34,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
+  characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
   reflectionGoals?:{lastRunAt:string|null;history:Array<{at:string;goalId:string;title:string;reason:string;sourceIds:string[];state:'observing'|'needs-review'}>};
   outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
 };
@@ -65,6 +66,7 @@ function empty():SoulData {
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
     growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],
+    characterEvolution:{lastReviewedAt:null,history:[]},
     outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
 }
@@ -78,6 +80,7 @@ function validate(value:unknown):SoulData {
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
+  if(!state.characterEvolution||!Array.isArray(state.characterEvolution.history))state.characterEvolution={lastReviewedAt:null,history:[]};
   if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
   if(!state.outreach||!Array.isArray(state.outreach.items))state.outreach={lastPreparedAt:null,items:[]};
   if(!state.growth||!Array.isArray(state.growth.history))state.growth={lastReviewedAt:null,reviews:0,history:[]};
@@ -210,6 +213,49 @@ export class SoulEngine {
         initiativeEnabled:d.settings.initiativeEnabled},
       statement:'Модель личности и истории, не доказательство сознания, чувств или автономного выполнения задач.'
     };
+  }
+  characterEvolutionReport(){
+    if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled)
+      return {history:[],activeStrategy:null,policy:'Персональный контекст или рефлексия отключены'};
+    const history=this.data.characterEvolution?.history??[];
+    const active=history.find(e=>e.status==='validated');
+    return {history:history.slice(0,30),activeStrategy:active?.strategy??null,
+      policy:'Изменяется только подсказка к стилю ответа после проверяемой оценки; базовые ценности и настройки владельца неизменны.'};
+  }
+  async reviewCharacterEvolution(now=new Date()){
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext||!this.data.settings.reflectionsEnabled)
+        return {reviewed:false,reason:'Персональный контекст или рефлексия отключены'};
+      const state=this.data.characterEvolution??{lastReviewedAt:null,history:[]};
+      const last=Date.parse(state.lastReviewedAt??'');
+      if(Number.isFinite(last)&&now.getTime()-last<24*86400000)
+        return {reviewed:false,reason:'Проверка уже выполнена'};
+      const events=(this.data.feedbackEvents??[]).filter(e=>Number.isFinite(Date.parse(e.at))&&
+        now.getTime()>=Date.parse(e.at)&&now.getTime()-Date.parse(e.at)<60*86400000);
+      const recent=events.filter(e=>now.getTime()-Date.parse(e.at)<30*86400000);
+      const previous=events.filter(e=>now.getTime()-Date.parse(e.at)>=30*86400000);
+      const rate=(rows:FeedbackEvent[])=>rows.length?rows.filter(e=>e.rating==='positive').length/rows.length:null;
+      const recentRate=rate(recent),previousRate=rate(previous);
+      const enough=recent.length>=5&&previous.length>=5;
+      const improving=enough&&recentRate!==null&&previousRate!==null&&recentRate-previousRate>=0.15;
+      const declining=enough&&recentRate!==null&&previousRate!==null&&previousRate-recentRate>=0.15;
+      const strategy=declining?'Усилить проверку фактов и явно отмечать неопределённость':
+        improving?'Сохранять текущую проверку фактов и подтверждать результаты':
+        'Собирать обратную связь без изменения характера';
+      const status:'proposed'|'validated'|'insufficient-evidence'=improving?'validated':
+        declining?'proposed':'insufficient-evidence';
+      const sourceIds=[...new Set([...recent,...previous].map(e=>e.sourceId))].slice(0,12);
+      const event={at:now.toISOString(),strategy,status,
+        reason:!enough?'Недостаточно оценок: необходимо минимум пять в каждом 30-дневном периоде':
+          improving?'Доля положительных оценок выросла не менее чем на 15 процентных пунктов':
+          declining?'Доля положительных оценок снизилась не менее чем на 15 процентных пунктов':
+          'Существенного изменения качества не обнаружено',
+        sourceIds,recentRate,previousRate};
+      state.lastReviewedAt=now.toISOString();
+      state.history.unshift(event);state.history=state.history.slice(0,90);
+      this.data.characterEvolution=state;
+      return {reviewed:true,event};
+    });
   }
   experienceDecision(now=new Date()){
     const settings=this.data.settings;
@@ -497,8 +543,9 @@ export class SoulEngine {
     if(!withMemory||!this.data.settings.personalContext)return base;
     const world=this.innerWorld();
     const decision=this.experienceDecision();
+    const evolution=this.characterEvolutionReport();
     const profile=this.personalityProfile();
-    return base+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
+    return base+(evolution.activeStrategy?'\nПроверенная стратегия общения: '+evolution.activeStrategy+'.':'')+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
       '. Ценности: '+profile.character.values.join(', ')+
       '. Модель настроения (стиль ответа, не чувства): '+profile.emotionalModel.mood+
       '. История и опыт отражены в подтверждённых предпочтениях и уроках. '+
