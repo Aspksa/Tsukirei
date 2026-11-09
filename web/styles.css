@@ -324,3 +324,14 @@
 .brain-topic-groups{display:flex;gap:7px;overflow-x:auto;max-width:100%;padding:3px 0}
 .brain-topic-button{flex:none;border:1px solid #40372d;background:#1d1a1b;color:#b8ad9d;border-radius:20px;padding:7px 11px;font-size:11px;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brain-topic-button[aria-pressed="true"]{background:#392b1a;border-color:#a17a43;color:#f1d19b}
+
+/* Historical growth controls and gentle map reveal. */
+.brain-growth-periods{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0 4px}
+.brain-growth-periods button{border:1px solid #493a2b;background:#1b191b;color:#b5a995;border-radius:18px;padding:7px 12px;font-size:11px}
+.brain-growth-periods button[aria-pressed="true"]{border-color:#b88c4b;background:#382b1a;color:#f2d19a}
+@media(prefers-reduced-motion:no-preference){
+ #brain-map-svg g[role="button"]{animation:brainNodeReveal .32s ease-out both}
+ #brain-map-svg line{animation:brainLinkReveal .35s ease-out both}
+ @keyframes brainNodeReveal{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+ @keyframes brainLinkReveal{from{opacity:0}to{opacity:1}}
+}

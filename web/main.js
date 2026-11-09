@@ -86,6 +86,7 @@ function go(page) {
   if (page === 'supermind') globalThis.TsukireiSupermindUI?.refresh();
 }
 let brainLoading=false;
+let brainGrowthPeriod='30';
 async function refreshBrainGrowth(){
   const summary=el('brain-growth-summary');
   const events=el('brain-growth-events');
@@ -96,20 +97,27 @@ async function refreshBrainGrowth(){
       api('/api/cognition/review-evidence')
     ]);
     const records=Array.isArray(growth.events)?growth.events:[];
+    const now=Date.now();
+    const days=brainGrowthPeriod==='all'?Infinity:Number(brainGrowthPeriod);
+    const visibleRecords=records.filter(event=>{
+      const timestamp=Date.parse(event.at);
+      return Number.isFinite(timestamp)&&(days===Infinity||
+        timestamp<=now&&timestamp>=now-days*86400000);
+    });
     const pending=Array.isArray(queue.items)?queue.items:[];
     const candidateCount=Array.isArray(evidence.items)?
       evidence.items.reduce((sum,item)=>sum+(Array.isArray(item.candidates)?item.candidates.length:0),0):0;
-    summary.textContent='Проверок: '+(growth.metrics?.scans??0)+' · Событий: '+records.length+
+    summary.textContent='Проверок: '+(growth.metrics?.scans??0)+' · Событий за период: '+visibleRecords.length+
       ' · Требуют внимания: '+pending.length+' · Возможные источники: '+candidateCount;
     events.replaceChildren();
-    for(const event of records.slice(0,8)){
+    for(const event of visibleRecords.slice(0,12)){
       const line=document.createElement('p');
       const time=Number.isFinite(Date.parse(event.at))?
         new Date(event.at).toLocaleString('ru-RU'):'';
       line.textContent=time+' · '+String(event.detail??event.stage??'Событие');
       events.append(line);
     }
-    if(!records.length)events.textContent='История появится после первой проверки знаний.';
+    if(!visibleRecords.length)events.textContent='За выбранный период событий нет.';
     review.replaceChildren();
     for(const item of pending.slice(0,12)){
       const line=document.createElement('p');
@@ -176,7 +184,16 @@ async function refreshBrainOverview(){
     el('brain-metrics').textContent='Не удалось загрузить карту: '+(error.message||'ошибка');
   }finally{brainLoading=false;}
 }
-el('brain-refresh').addEventListener('click',()=>{void refreshBrainOverview();void refreshBrainGrowth();});
+el('brain-refresh').addEventListener('click',()=>{void refreshBrainKnowledge();void refreshBrainGrowth();});
+document.querySelectorAll('[data-brain-period]').forEach(button=>{
+  button.addEventListener('click',()=>{
+    brainGrowthPeriod=button.dataset.brainPeriod;
+    document.querySelectorAll('[data-brain-period]').forEach(item=>{
+      item.setAttribute('aria-pressed',String(item===button));
+    });
+    void refreshBrainGrowth();
+  });
+});
 let selectedBrainTopic=null;
 async function refreshBrainKnowledge(){
   const svg=el('brain-map-svg');
