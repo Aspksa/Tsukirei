@@ -41,3 +41,28 @@
 .chat-source-entry p{font-size:11px;line-height:1.5;color:#a69da3;overflow-wrap:anywhere;white-space:pre-wrap;margin-top:5px}
 @media(max-width:960px){.rag-layout{grid-template-columns:1fr}.rag-aside{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
 @media(max-width:700px){.rag-aside{display:flex}.rag-search-controls{flex-direction:column}.rag-search-controls .gold-button{width:100%}.rag-import,.rag-library,.rag-search-form{padding:19px}}
+
+/* RAG Engine v0.8 — controls live in the RAG sidebar, no visual city. */
+.rag-engine-panel{padding:22px}
+.rag-engine-panel .list-heading{margin-bottom:8px}
+.rag-engine-panel .list-heading h2{font-size:17px}
+.rag-engine-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.rag-engine-actions .ghost-button{font-size:11px;padding:9px 10px;min-width:0}
+.rag-engine-details{margin-top:15px;border-top:1px solid #393133;padding:15px 0 0}
+.rag-engine-details>summary{cursor:pointer;color:#e2c190;font-size:12px;line-height:1.5}
+.rag-engine-details .ghost-button{margin:12px 0;font-size:11px;padding:9px 11px}
+.rag-diagnostics{display:flex;flex-direction:column;gap:7px;margin-top:11px;max-height:210px;overflow-y:auto}
+.rag-inspection-item{padding:10px 11px;border:1px solid #3b3233;border-radius:10px;background:#15161a;overflow-wrap:anywhere}
+.rag-inspection-item strong{display:block;color:#d9bd8e;font-size:11px;line-height:1.55}
+.rag-inspection-item p{font-size:11px;color:#b1a6a8;margin:6px 0}
+.rag-inspection-item small{display:block;font-size:10px;color:#91868a;line-height:1.5}
+.rag-graph-form{display:flex;gap:7px;align-items:stretch;margin-top:12px}
+.rag-graph-form input{flex:1;min-width:0;background:#0c0d12;color:var(--text);border:1px solid #403638;border-radius:9px;font-size:12px;padding:9px}
+.rag-graph-form button{margin:0!important}
+.rag-provider-form{display:flex;flex-direction:column;gap:7px;margin-top:13px}
+.rag-provider-form>label{font-size:11px;color:#b7acb0;line-height:1.6;margin-top:8px}
+.rag-provider-form>label:has(input[type=checkbox]){display:flex;align-items:center;gap:8px;color:#d9bd8e}
+.rag-provider-form input[type=checkbox]{accent-color:var(--gold)}
+.rag-provider-form input:not([type=checkbox]){width:100%;min-width:0;padding:10px 12px;border-radius:9px;border:1px solid #42393a;background:#0a0d11;color:var(--text);font-size:12px}
+.rag-provider-form .gold-button{margin-top:13px}
+.rag-provider-form .subtle-divider{margin:12px 0}
