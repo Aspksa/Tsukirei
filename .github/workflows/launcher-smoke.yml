@@ -78,6 +78,13 @@ jobs:
             if (-not $ragDoc.document.id) { throw 'RAG document import failed' }
             $ragFound = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/rag/search' -Method Post -ContentType 'application/json' -Body '{"query":"archive retrieval"}' -TimeoutSec 10
             if (-not ($ragFound.items | Where-Object { $_.kind -eq 'document' -and $_.id -eq $ragDoc.document.id })) { throw 'RAG document search failed on Windows' }
+            $soul = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/soul' -TimeoutSec 10
+            if ($soul.settings.address -ne 'хозяин' -or $soul.metrics.chatsObserved -ne 0) { throw 'Soul Engine defaults unavailable' }
+            $soulPref = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/soul/preferences' -Method Post -ContentType 'application/json' -Body '{"text":"Portable preferences stay locally"}' -TimeoutSec 10
+            if (-not $soulPref.item.id) { throw 'Soul preferences could not be saved' }
+            $soulNext = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/soul' -TimeoutSec 10
+            if ($soulNext.metrics.confirmedPreferences -ne 1) { throw 'Soul memory was not persisted' }
+            if (-not (Test-Path -LiteralPath (Join-Path $dir 'data/soul-state.json'))) { throw 'Soul local file was not created' }
             $config = Get-Content -LiteralPath (Join-Path $dir 'data/portable-postgres.json') -Raw | ConvertFrom-Json
             if (([IO.Path]::GetPathRoot($config.store)) -ne ([IO.Path]::GetPathRoot($dir))) { throw 'Database not stored on the same drive' }
             if ($config.store -notmatch '^[\x20-\x7E]+$') { throw 'Database physical path must be ASCII' }
