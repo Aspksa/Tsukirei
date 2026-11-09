@@ -149,3 +149,11 @@ test('monitor trace graph uses actual server stage items and accessible buttons'
  assert.match(main,/chain\.sort\(\(a,b\)=>Number\(a\.id\)-Number\(b\.id\)\)/);
  assert.match(css,/\.monitor-graph-node:focus-visible/);
 });
+
+test('monitor stage detail links to source without exposing user content',()=>{
+ assert.match(main,/function monitorStageSource\(stage\)/);
+ assert.match(main,/Связанный исходный код:/);
+ assert.match(main,/https:\/\/github\.com\/Aspksa\/Tsukirei\/blob\/main\//);
+ assert.match(main,/link\.rel='noopener noreferrer'/);
+ assert.match(css,/\.monitor-graph-detail a:focus-visible/);
+});

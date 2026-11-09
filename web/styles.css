@@ -606,3 +606,9 @@ img,svg,video,canvas{max-width:100%}
 .monitor-graph-detail{font-size:12px;line-height:1.7;color:#cbbbd4;padding:12px 14px;background:#211a2d;border:1px solid #584760;border-radius:12px;margin:10px 0 20px;overflow-wrap:anywhere}
 @media(max-width:520px){.monitor-trace-graph{padding:11px}.monitor-graph-node{flex-basis:125px}.monitor-graph-head span{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.monitor-graph-node{transition:none}.monitor-graph-node:hover{transform:none}}
+
+/* Source navigation for confirmed monitor stages */
+.monitor-graph-detail p{margin:0 0 7px}
+.monitor-graph-detail a{display:inline-flex;margin-top:5px;color:#f0d5a0;text-decoration:underline;text-underline-offset:3px;font-weight:600}
+.monitor-graph-detail a:hover{color:#fff0c8}
+.monitor-graph-detail a:focus-visible{outline:2px solid #f0d5a0;outline-offset:3px;border-radius:3px}
