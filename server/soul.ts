@@ -7,6 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {feedbackQuality, type FeedbackEvent} from './personality-evaluation.ts';
 
 type Tone = 'нежный' | 'спокойный' | 'деловой';
 type PreferenceStatus = 'confirmed' | 'suggested';
@@ -32,6 +33,7 @@ type SoulData = {
   recurring:Array<{ topic:string; messageId:string; at:string }>;
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
+  feedbackEvents?:FeedbackEvent[];
 };
 
 const tones:Tone[]=['нежный','спокойный','деловой'];
@@ -60,7 +62,7 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]}
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[]
   };
 }
 function validate(value:unknown):SoulData {
@@ -72,6 +74,7 @@ function validate(value:unknown):SoulData {
     throw new Error('Несовместимый формат данных личности');
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
+  if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
   if(!state.growth||!Array.isArray(state.growth.history))state.growth={lastReviewedAt:null,reviews:0,history:[]};
   if(typeof state.metrics.completedTasks!=='number')state.metrics.completedTasks=0;
   if(!tones.includes(state.settings.tone)||typeof state.settings.address!=='string')
@@ -158,6 +161,9 @@ export class SoulEngine {
     const entry:Journal={id:randomUUID(),at:new Date().toISOString(),type,text,...(source?{source}:{})};
     this.data.journal=unique(this.data.journal,entry,MAX_JOURNAL);
   }
+  qualityReport(){
+    return feedbackQuality(this.data.feedbackEvents??[]);
+  }
   growthObjectives(){
     const d=this.data;
     const completed=d.metrics.completedTasks;
@@ -186,6 +192,7 @@ export class SoulEngine {
   growthReport(){
     const growth:NonNullable<SoulData['growth']>=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
     return {lastReviewedAt:growth.lastReviewedAt,reviews:growth.reviews,
+      quality:this.qualityReport(),
       objectives:this.growthObjectives().objectives,
       history:growth.history.slice(0,40),pendingInitiatives:this.data.initiatives.filter(i=>i.status==='new').length,
       policy:'Локальная проверка наблюдаемых сигналов. Без самостоятельного обучения весов модели и изменения базовых ценностей.'};
@@ -389,6 +396,9 @@ export class SoulEngine {
     if(rating!=='positive'&&rating!=='negative')throw new Error('Оценка должна быть positive либо negative');
     const detail=note===undefined||note===''?'':bounded(note,240,'Комментарий');
     return this.modify(()=>{
+      this.data.feedbackEvents??=[];
+      this.data.feedbackEvents.unshift({at:new Date().toISOString(),rating,sourceId:'chat:'+id});
+      this.data.feedbackEvents=this.data.feedbackEvents.slice(0,500);
       if(rating==='positive')this.data.metrics.positiveFeedback++;
       else this.data.metrics.negativeFeedback++;
       this.journal('feedback',(rating==='positive'?'Ответ отмечен как полезный':'Ответ отмечен как неудачный')+
