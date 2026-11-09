@@ -42,15 +42,63 @@ function notify(message, error = false) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('is-visible'), 4500);
 }
+const brainRequestTrace=[];
+const BRAIN_TRACE_LIMIT=40;
+function brainTraceModule(path){
+ if(path.startsWith('/api/cognition/'))return 'server/index.ts → server/cognition.ts';
+ if(path.startsWith('/api/soul/'))return 'server/index.ts → server/soul.ts';
+ if(path.startsWith('/api/living'))return 'server/index.ts → server/living.ts';
+ if(path.startsWith('/api/supermind'))return 'server/index.ts → server/supermind.ts';
+ if(path.startsWith('/api/rag/'))return 'server/index.ts → RAG';
+ if(path.startsWith('/api/brain/'))return 'server/index.ts → обзор подсистем';
+ if(path.startsWith('/api/chat'))return 'server/index.ts → чат';
+ return 'server/index.ts → обработчик API';
+}
+function recordBrainRequest(path,method,status,duration){
+ const route=String(path).split('?')[0].split('#')[0];
+ if(!route.startsWith('/api/'))return;
+ brainRequestTrace.unshift({route,method,status,duration,at:new Date()});
+ if(brainRequestTrace.length>BRAIN_TRACE_LIMIT)brainRequestTrace.length=BRAIN_TRACE_LIMIT;
+ renderBrainRequestTrace();
+}
+function renderBrainRequestTrace(){
+ const list=document.getElementById('brain-trace-list');
+ if(!list)return;
+ list.replaceChildren();
+ if(!brainRequestTrace.length){
+  const empty=document.createElement('p');empty.className='brain-trace-empty';
+  empty.textContent='Запросов пока нет. Откройте раздел или обновите карту мозга.';
+  list.append(empty);return;
+ }
+ for(const entry of brainRequestTrace){
+  const row=document.createElement('div');row.className='brain-trace-entry';
+  const header=document.createElement('div');header.className='brain-trace-entry-header';
+  const method=document.createElement('span');method.className='brain-trace-method';method.textContent=entry.method;
+  const route=document.createElement('code');route.textContent=entry.route;
+  const state=document.createElement('span');state.className='brain-trace-status';
+  state.dataset.ok=String(entry.status>=200&&entry.status<400);
+  state.textContent=entry.status===0?'Сеть недоступна':String(entry.status);
+  header.append(method,route,state);
+  const detail=document.createElement('p');
+  detail.textContent=entry.at.toLocaleTimeString('ru-RU')+' · '+entry.duration+' мс · '+brainTraceModule(entry.route);
+  row.append(header,detail);list.append(row);
+ }
+}
 async function api(path, options = {}) {
+  const method=options.method||'GET';
+  const started=performance.now();
   let res;
   try {
     res = await fetch(path, {
-      method: options.method || 'GET',
+      method,
       headers: options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined
     });
-  } catch { throw new Error('Не удаётся подключиться к локальному серверу.'); }
+  } catch {
+    recordBrainRequest(path,method,0,Math.round(performance.now()-started));
+    throw new Error('Не удаётся подключиться к локальному серверу.');
+  }
+  recordBrainRequest(path,method,res.status,Math.round(performance.now()-started));
   let value;
   try { value = await res.json(); } catch { throw new Error('Сервер вернул некорректный ответ.'); }
   if (!res.ok) throw new Error(value.error || 'Ошибка запроса: ' + res.status);
@@ -675,6 +723,7 @@ function setMobileMenu(open){
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
 }
+el('brain-trace-clear').addEventListener('click',()=>{brainRequestTrace.length=0;renderBrainRequestTrace();});
 el('mobile-menu').addEventListener('click',()=>{
  const opening=!el('shell').classList.contains('menu-open');
  setMobileMenu(opening);

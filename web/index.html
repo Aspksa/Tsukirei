@@ -94,6 +94,13 @@
             <div class="brain-graph-detail" id="brain-graph-detail" aria-live="polite">Выбери узел, чтобы посмотреть его название и связи.</div>
             <div class="brain-footnote" id="brain-footnote">Размер узлов отражает число записей, а не интеллект или сознание.</div>
           </div>
+          <section class="glass-panel brain-trace" aria-labelledby="brain-trace-title">
+            <div class="brain-live-header"><div><div class="panel-kicker">LIVE · ТОЛЬКО ЛОКАЛЬНЫЕ HTTP-ЗАПРОСЫ</div><h2 id="brain-trace-title">Куда обращается Цукирэй</h2></div><button class="ghost-button" type="button" id="brain-trace-clear">Очистить журнал</button></div>
+            <p class="brain-trace-explain">Реальные обращения этой вкладки к локальному API. Показаны маршрут, метод, время и результат. Содержимое сообщений и файлов не записывается.</p>
+            <div class="brain-trace-flow" aria-hidden="true"><span>Интерфейс</span><b>→</b><span>Локальный API</span><b>→</b><span>Модуль / обработчик</span></div>
+            <div class="brain-trace-list" id="brain-trace-list" role="log" aria-live="off" aria-label="История запросов"><p class="brain-trace-empty">Запросов пока нет. Откройте раздел или обновите карту мозга.</p></div>
+            <p class="brain-trace-explain">Это журнал сетевых запросов интерфейса, а не трассировка внутренних чтений файлов. Названия модулей — подсказки по архитектуре, не доказательство обращения к конкретному файлу.</p>
+          </section>
           <div class="glass-panel brain-growth" aria-label="История роста знаний">
             <div class="panel-kicker">РАЗВИТИЕ ПАМЯТИ · ЛОКАЛЬНО</div>
             <h2>История роста знаний</h2>

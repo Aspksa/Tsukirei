@@ -87,3 +87,14 @@ test('brain growth chart uses actual local event timestamps and accessible label
  assert.match(css,/\.brain-chart-bar\{/);
  assert.match(css,/prefers-contrast:more/);
 });
+
+test('live brain request inspector records only API route metadata',()=>{
+ assert.match(app,/id="brain-trace-list" role="log"/);
+ assert.match(app,/id="brain-trace-clear"/);
+ assert.match(main,/const BRAIN_TRACE_LIMIT=40/);
+ assert.match(main,/recordBrainRequest\(path,method,res\.status/);
+ assert.match(main,/recordBrainRequest\(path,method,0/);
+ assert.match(main,/String\(path\)\.split\('\?'\)\[0\]/);
+ assert.match(main,/brainRequestTrace\.unshift\(\{route,method,status,duration,at:new Date\(\)\}\)/);
+ assert.match(css,/\.brain-trace-entry\{/);
+});
