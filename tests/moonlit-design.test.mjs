@@ -75,3 +75,15 @@ test('mobile drawer cycles keyboard focus and initially focuses navigation',()=>
  assert.match(main,/focusable\.at\(-1\)\.focus\(\)/);
  assert.match(main,/focusable\[0\]\.focus\(\)/);
 });
+
+test('brain growth chart uses actual local event timestamps and accessible labels',()=>{
+ assert.match(app,/id="brain-growth-chart" role="img"/);
+ assert.match(app,/id="brain-growth-svg"/);
+ assert.match(app,/id="brain-chart-caption" aria-live="polite"/);
+ assert.match(main,/function renderBrainGrowthChart\(records,period\)/);
+ assert.match(main,/records\.map\(item=>Date\.parse\(item\.at\)\)/);
+ assert.match(main,/renderBrainGrowthChart\(visibleRecords,brainGrowthPeriod\)/);
+ assert.match(main,/wrap\.setAttribute\('aria-label'/);
+ assert.match(css,/\.brain-chart-bar\{/);
+ assert.match(css,/prefers-contrast:more/);
+});
