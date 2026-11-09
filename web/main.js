@@ -174,7 +174,7 @@ function go(page) {
   el('mobile-menu').setAttribute('aria-expanded','false');
   el('mobile-menu').setAttribute('aria-label','Открыть меню');
   if (window.location.hash !== '#' + page) window.location.hash = page;
-  if (page === 'brain') { void refreshBrainKnowledge(); void refreshBrainGrowth(); }
+  if (page === 'brain') { void refreshBrainKnowledge(); void refreshBrainGrowth(); void refreshRagStudio(); }
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
   if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
   if (page === 'living') globalThis.TsukireiLivingUI?.refresh();
@@ -340,7 +340,38 @@ async function refreshBrainOverview(){
     el('brain-metrics').textContent='Не удалось загрузить карту: '+(error.message||'ошибка');
   }finally{brainLoading=false;}
 }
-el('brain-refresh').addEventListener('click',()=>{void refreshBrainKnowledge();void refreshBrainGrowth();});
+async function refreshRagStudio(){
+ const status=el('rag-studio-status'),metrics=el('rag-studio-metrics');
+ status.textContent='Получение состояния движка памяти…';status.dataset.state='loading';metrics.replaceChildren();
+ try{
+  const data=await api('/api/rag/engine');
+  const worker=data.worker||{},provider=data.provider||{},cache=data.cache||{},index=data.index||{};
+  const available=worker.available!==false&&data.index!==null;
+  const busy=Boolean(worker.running||worker.pending);
+  const failed=Boolean(worker.error);
+  status.dataset.state=failed?'error':busy?'busy':'ready';
+  status.textContent=!available?'Локальный режим · фоновый индекс PostgreSQL недоступен':
+   failed?'Индексация требует внимания':busy?'Индекс обновляется':'Движок памяти готов';
+  const rows=[
+   ['Индекс',!available?'Локальный поиск':failed?'Ошибка':busy?'Обновление':'Доступен'],
+   ['Векторный поиск',provider.embeddingsEnabled?'Включён':'Не включён'],
+   ['Реранжирование',provider.rerankEnabled?'Включено':'Не включено'],
+   ['Кэш',typeof cache.size==='number'?String(cache.size)+' записей':'Состояние получено'],
+   ['Документы в индексе',typeof index.documents==='number'?String(index.documents):'Нет данных']
+  ];
+  for(const [label,value] of rows){
+   const card=document.createElement('div');card.className='rag-studio-metric';
+   const heading=document.createElement('span');heading.textContent=label;
+   const metric=document.createElement('strong');metric.textContent=value;
+   card.append(heading,metric);metrics.append(card);
+  }
+ }catch(error){
+  status.dataset.state='error';
+  status.textContent='Не удалось получить состояние RAG: '+(error.message||'ошибка');
+ }
+}
+el('rag-studio-refresh').addEventListener('click',()=>{void refreshRagStudio();});
+el('brain-refresh').addEventListener('click',()=>{void refreshBrainKnowledge();void refreshBrainGrowth();void refreshRagStudio();});
 document.querySelectorAll('[data-brain-period]').forEach(button=>{
   button.addEventListener('click',()=>{
     brainGrowthPeriod=button.dataset.brainPeriod;
