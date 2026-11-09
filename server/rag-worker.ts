@@ -115,8 +115,9 @@ export class RagWorker {
     }catch(e){
       this.error=e instanceof Error?e.message:String(e);
       this.indexingStage='Ошибка индекса: '+this.error;
-      // Incomplete scans never prune records. Next request retries safely.
-      if(!this.stopped)this.pending=true;
+      // An incomplete scan never deletes entries. Retry at the next scheduled
+      // maintenance tick or after a user write, not in a hot failure loop.
+      this.pending=false;
     }finally{
       this.active=false;
       if(this.pending&&!this.paused&&!this.stopped){
