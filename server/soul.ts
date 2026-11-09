@@ -169,9 +169,36 @@ export class SoulEngine {
   qualityReport(){
     return feedbackQuality(this.data.feedbackEvents??[]);
   }
+  reflectionActionPlans(){
+    if(!this.data.settings.reflectionsEnabled||!this.data.settings.personalContext)
+      return {items:[],policy:'Рефлексия или персональный контекст отключены'};
+    const goals=(this.data.reflectionGoals?.history??[]).filter(g=>g.state==='needs-review');
+    const latest=new Map<string,typeof goals[number]>();
+    for(const goal of goals)if(!latest.has(goal.goalId))latest.set(goal.goalId,goal);
+    const templates:Record<string,{options:Array<{title:string;benefit:string;risk:string}>;recommended:number}>={
+      'topic:запуск':{options:[
+        {title:'Собрать диагностические логи и шаги воспроизведения',benefit:'Установить причину до изменений',risk:'Потребуется время на сбор данных'},
+        {title:'Проверить последнюю рабочую версию',benefit:'Локализовать регрессию',risk:'Не устраняет причину автоматически'}],recommended:0},
+      'topic:скорость':{options:[
+        {title:'Измерить время ответа и расход памяти',benefit:'Получить проверяемые метрики',risk:'Нужны воспроизводимые замеры'},
+        {title:'Проверить кэш и частоту запросов',benefit:'Найти избыточную нагрузку',risk:'Без метрик возможны неверные выводы'}],recommended:0},
+      'topic:поиск':{options:[
+        {title:'Сравнить RAG-выдачу на контрольных вопросах',benefit:'Обнаружить пропуски поиска',risk:'Нужны эталонные вопросы'},
+        {title:'Проверить индексацию и дубликаты',benefit:'Выявить проблемы в источниках',risk:'Не гарантирует улучшение качества'}],recommended:0},
+      'quality':{options:[
+        {title:'Разобрать отрицательные оценки по исходным ответам',benefit:'Найти повторяющиеся ошибки',risk:'Оценки субъективны'},
+        {title:'Составить контрольные вопросы с эталонами',benefit:'Проверять изменения объективнее',risk:'Эталоны требуют независимой проверки'}],recommended:0}
+    };
+    return {items:[...latest.values()].slice(0,8).filter(g=>templates[g.goalId]).map(g=>({
+      goalId:g.goalId,title:g.title,reason:g.reason,sourceIds:g.sourceIds,
+      options:templates[g.goalId].options,recommended:templates[g.goalId].recommended,
+      status:'proposal-only',requiresOwnerApproval:true
+    })),policy:'Рекомендации шаблонные и локальные; источники указывают на сигналы проблемы, а не на доказанное решение. Действия не запускаются.'};
+  }
   reflectionGoalReport(){
     const goals=this.data.reflectionGoals??{lastRunAt:null,history:[]};
     return {lastRunAt:goals.lastRunAt,history:goals.history.slice(0,30),
+      actionPlans:this.reflectionActionPlans().items,
       policy:'Гипотезы строятся локально из подтверждённых сигналов; изменения модели и внешние действия не выполняются.'};
   }
   async reflectOnGoals(now=new Date()){
