@@ -131,8 +131,25 @@ function Ensure-PortablePostgres {
         $download = $exe + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
         try {
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            Invoke-WebRequest -Uri 'https://github.com/vectorize-io/pg0/releases/download/v0.16.1/pg0-windows-x86_64.exe' -OutFile $download -UseBasicParsing -TimeoutSec 240
-            if ((Get-Sha256 $download).ToLowerInvariant() -ne $expected) { throw 'SHA-256 PostgreSQL не совпала.' }
+            $releaseUrl = 'https://github.com/vectorize-io/pg0/releases/download/v0.16.1/pg0-windows-x86_64.exe'
+            $downloadComplete = $false
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+                try {
+                    if (Test-Path -LiteralPath $download) {
+                        Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue
+                    }
+                    Invoke-WebRequest -Uri $releaseUrl -OutFile $download -UseBasicParsing -TimeoutSec 240 -ErrorAction Stop
+                    if ((Get-Sha256 $download).ToLowerInvariant() -ne $expected) { throw 'SHA-256 PostgreSQL не совпала.' }
+                    $downloadComplete = $true
+                    break
+                } catch {
+                    if ($_.Exception.Message -match 'SHA-256') { throw }
+                    if ($attempt -eq 4) { throw }
+                    Say ('Скачивание PostgreSQL не удалось (попытка ' + $attempt + '/4). Повторяю...')
+                    Start-Sleep -Seconds ([Math]::Min(12, $attempt * 3))
+                }
+            }
+            if (-not $downloadComplete) { throw 'Не удалось скачать проверенный PostgreSQL.' }
             Move-Item -LiteralPath $download -Destination $exe -Force
         } finally {
             if (Test-Path -LiteralPath $download) { Remove-Item -LiteralPath $download -Force -ErrorAction SilentlyContinue }
