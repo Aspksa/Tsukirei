@@ -586,3 +586,23 @@ img,svg,video,canvas{max-width:100%}
 .monitor-trace-picker select:focus-visible{outline:2px solid #e6bf78;outline-offset:2px}
 .monitor-trace-picker span{margin-left:auto}
 @media(max-width:520px){.monitor-trace-picker select{width:100%}}
+
+/* Moonlit Trace Graph — explicit server stage sequences */
+.monitor-graph-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:22px 0 10px}
+.monitor-graph-head h3{font-size:16px;color:#f4eff8}
+.monitor-graph-head span{font-size:11px;color:#b8b0c4}
+.monitor-trace-graph{display:grid;gap:15px;max-height:440px;overflow:auto;padding:15px;background:radial-gradient(ellipse at 50% 0%,#342441,#171321 70%);border:1px solid #675378;border-radius:16px}
+.monitor-graph-chain{display:grid;gap:11px}
+.monitor-graph-chain-title{font-size:11px;letter-spacing:.06em;color:#e6bf78}
+.monitor-graph-track{display:flex;align-items:center;gap:9px;overflow-x:auto;padding:3px 1px 10px;scrollbar-color:#685575 #211a2d}
+.monitor-graph-node{flex:1 0 130px;max-width:215px;min-height:75px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:7px;text-align:left;padding:12px 14px;border:1px solid #806a92;border-radius:13px;background:linear-gradient(140deg,#3a2b4d,#211b2e);color:#f4eff8;cursor:pointer;transition:border-color .18s ease,transform .18s ease}
+.monitor-graph-node strong{font-size:12px;font-weight:650}
+.monitor-graph-node span{font-size:11px;color:#b8b0c4}
+.monitor-graph-node[data-ok="false"]{border-color:#bf7382}
+.monitor-graph-node:hover{border-color:#e6bf78;transform:translateY(-2px)}
+.monitor-graph-node[aria-pressed="true"]{border-color:#f4d394;box-shadow:0 0 0 2px #e6bf7844}
+.monitor-graph-node:focus-visible{outline:2px solid #f4d394;outline-offset:3px}
+.monitor-graph-arrow{flex:0 0 auto;color:#e6bf78;font-size:20px}
+.monitor-graph-detail{font-size:12px;line-height:1.7;color:#cbbbd4;padding:12px 14px;background:#211a2d;border:1px solid #584760;border-radius:12px;margin:10px 0 20px;overflow-wrap:anywhere}
+@media(max-width:520px){.monitor-trace-graph{padding:11px}.monitor-graph-node{flex-basis:125px}.monitor-graph-head span{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.monitor-graph-node{transition:none}.monitor-graph-node:hover{transform:none}}
