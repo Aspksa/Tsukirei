@@ -607,15 +607,26 @@ function toggleChat(open) {
   el('chat-panel').hidden = !open;
   el('chat-toggle').setAttribute('aria-expanded', String(open));
   if (open) { renderChat(); el('chat-input').focus(); }
+  else { el('chat-toggle').focus(); }
 }
 el('chat-toggle').addEventListener('click', () => toggleChat(el('chat-panel').hidden));
+el('chat-expand').addEventListener('click',()=>{
+ const expanded=el('chat-panel').classList.toggle('chat-expanded');
+ el('chat-expand').setAttribute('aria-pressed',String(expanded));
+ el('chat-expand').setAttribute('aria-label',expanded?'Свернуть чат':'Развернуть чат');
+ el('chat-expand').title=expanded?'Свернуть чат':'Развернуть чат';
+ el('chat-input').focus();
+});
+function updateChatCounter(){el('chat-count').textContent=el('chat-input').value.length+' / 8000'}
+el('chat-input').addEventListener('input',updateChatCounter);
+updateChatCounter();
 el('chat-close').addEventListener('click', () => toggleChat(false));
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && !el('chat-panel').hidden) toggleChat(false);
   if (event.ctrlKey && event.key.toLowerCase() === 'k') { event.preventDefault(); toggleChat(el('chat-panel').hidden); }
 });
 el('chat-input').addEventListener('keydown', event => {
-  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); el('chat-form').requestSubmit(); }
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); el('chat-form').requestSubmit(); }
 });
 el('chat-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -625,13 +636,14 @@ el('chat-form').addEventListener('submit', event => {
     if (!prompt) return;
     if (!viewState.settings.configured) { notify('Сначала подключите Cloud.ru в настройках', true); go('settings'); return; }
     busy = true; el('chat-send').disabled = true; el('chat-input').disabled = true;
+    el('chat-send-status').hidden=false;el('chat-thread').setAttribute('aria-busy','true');
     try {
       const result = await api('/api/chat', { method: 'POST', body: { prompt, useMemory: el('chat-use-memory').checked } });
       viewState.messages = result.messages;
       chatSources = Array.isArray(result.sources) ? result.sources : [];
-      el('chat-input').value = '';
+      el('chat-input').value = '';updateChatCounter();
       render(); 
-    } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false; el('chat-input').focus(); }
+    } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false;el('chat-send-status').hidden=true;el('chat-thread').removeAttribute('aria-busy'); el('chat-input').focus(); }
   });
 });
 el('clear-chat').addEventListener('click', () => run(async () => {
