@@ -64,6 +64,41 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   const vector = await api(first.base, '/api/knowledge/search', 'POST', { embedding: [1, 0, 0] });
   assert.equal(vector.status, 200);
   assert.equal(vector.data.items[0].id, fact.data.knowledge.id);
+  const documentText=('Порядок технического обслуживания: редукторная муфта требует проверки. \n').repeat(45);
+  const upload={title:'Руководство обслуживания',content:documentText,source:'manual.md'};
+  const imported=await api(first.base,'/api/rag/documents','POST',upload);
+  assert.equal(imported.status,201,JSON.stringify(imported.data));
+  assert.equal(imported.data.duplicate,false);
+  const docId=imported.data.document.id;
+  const docs=await api(first.base,'/api/rag/documents');
+  assert.equal(docs.status,200);
+  assert.ok(docs.data.items.some(x=>x.id===docId&&x.parts>1));
+  const duplicate=await api(first.base,'/api/rag/documents','POST',upload);
+  assert.equal(duplicate.status,200);
+  assert.equal(duplicate.data.duplicate,true);
+  const ragSearch=await api(first.base,'/api/rag/search','POST',{query:'редукторная муфта',limit:8});
+  assert.equal(ragSearch.status,200,JSON.stringify(ragSearch.data));
+  assert.ok(ragSearch.data.items.some(x=>x.kind==='document'&&x.id===docId),
+    JSON.stringify(ragSearch.data));
+  const merged=await api(first.base,'/api/rag/search','POST',{
+    query:'Tsukirei сохраняет знания',embedding:[1,0,0],limit:8
+  });
+  assert.equal(merged.status,200,JSON.stringify(merged.data));
+  assert.equal(merged.data.mode,'hybrid');
+  assert.ok(merged.data.items.some(x=>x.kind==='knowledge'&&x.id===fact.data.knowledge.id));
+  const ragStatus=await api(first.base,'/api/rag/status');
+  assert.equal(ragStatus.status,200);
+  assert.equal(ragStatus.data.cloudRequestsForRetrieval,0);
+  assert.equal(ragStatus.data.documents,1);
+  const tooLarge=await api(first.base,'/api/rag/documents','POST',{
+    title:'Большой документ',content:'A'.repeat(100001)
+  });
+  assert.equal(tooLarge.status,400);
+  const removed=await api(first.base,'/api/rag/documents/'+docId,'DELETE');
+  assert.equal(removed.status,200);
+  const absent=await api(first.base,'/api/rag/documents');
+  assert.equal(absent.data.items.length,0);
+  assert.equal((await api(first.base,'/api/rag/documents/'+docId,'DELETE')).status,404);
   const bad = await api(first.base, '/api/knowledge', 'POST', { content: 'invalid', embedding: [Infinity, NaN] });
   assert.equal(bad.status, 400);
   first.child.kill();
