@@ -164,3 +164,12 @@ test('monitor renders storage backend provenance from actual server stage target
  assert.match(main,/backend\.className='monitor-graph-backend'/);
  assert.match(css,/\.monitor-graph-node \.monitor-graph-backend/);
 });
+
+test('RAG stages have dedicated source navigation and distinct visual encoding',()=>{
+ assert.match(main,/stage==='Кэш памяти'/);
+ assert.match(main,/stage==='Векторизация запроса'/);
+ assert.match(main,/stage==='Поиск по знаниям'/);
+ assert.match(main,/stage==='Ранжирование'/);
+ assert.match(main,/button\.dataset\.kind=/);
+ assert.match(css,/\.monitor-graph-node\[data-kind="rag"\]/);
+});
