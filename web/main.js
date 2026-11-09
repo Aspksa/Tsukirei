@@ -11,7 +11,6 @@ let busy = false;
 let toastTimer;
 let chatSources = [];
 let proactiveSuggestions = [];
-const shownProactive = new Set();
 async function refreshProactiveChat(){
   try{
     const result=await api('/api/soul/outreach');
@@ -488,11 +487,10 @@ function renderChat() {
     const empty = escapeNotNeeded('div', 'chat-welcome');
     empty.append(escapeNotNeeded('span', '', '✦'), escapeNotNeeded('strong', '', 'Цукирэй на связи, ' + (globalThis.TsukireiSoulUI?.address?.()||'хозяин')),
       escapeNotNeeded('p', '', 'Для ответа ИИ сохраните ключ и модель Cloud.ru в настройках.'));
-    list.append(empty); return;
+    list.append(empty);
   }
-  const suggestion=proactiveSuggestions.find(item=>!shownProactive.has(item.id));
+  const suggestion=proactiveSuggestions[0];
   if(suggestion){
-    shownProactive.add(suggestion.id);
     const bubble=escapeNotNeeded('div','message message-ai');
     bubble.append(escapeNotNeeded('small','','Цукирэй · предложение'),
       escapeNotNeeded('p','','Хозяин, я заметила повторяющуюся тему: '+suggestion.title+'. '+suggestion.reason));
@@ -502,8 +500,8 @@ function renderChat() {
     discuss.addEventListener('click',()=>{
       el('chat-input').value='Давай обсудим: '+suggestion.title;
       el('chat-input').focus();
-      bubble.remove();
       proactiveSuggestions=proactiveSuggestions.filter(x=>x.id!==suggestion.id);
+      renderChat();
     });
     const dismiss=escapeNotNeeded('button','soul-chat-feedback-button','Не сейчас');
     dismiss.type='button';
