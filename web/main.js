@@ -64,13 +64,47 @@ function recordBrainRequest(path,method,status,duration){
 function renderBrainRequestTrace(){
  const list=document.getElementById('brain-trace-list');
  if(!list)return;
+ const filter=document.getElementById('monitor-filter')?.value||'all';
+ const failures=brainRequestTrace.filter(e=>e.status===0||e.status>=400);
+ const average=brainRequestTrace.length?Math.round(brainRequestTrace.reduce((sum,e)=>sum+e.duration,0)/brainRequestTrace.length):null;
+ const stats=document.getElementById('monitor-stats');
+ if(stats){
+  const values=stats.querySelectorAll('strong');
+  values[0].textContent=String(brainRequestTrace.length);
+  values[1].textContent=average===null?'—':average+' мс';
+  values[2].textContent=String(failures.length);
+ }
+ const filtered=brainRequestTrace.filter(entry=>{
+  if(filter==='error')return entry.status===0||entry.status>=400;
+  if(filter==='slow')return entry.duration>=500;
+  if(filter==='chat')return entry.route.startsWith('/api/chat');
+  if(filter==='brain')return ['/api/brain/','/api/cognition/','/api/rag/'].some(prefix=>entry.route.startsWith(prefix));
+  return true;
+ });
+ const visible=document.getElementById('monitor-visible-count');
+ if(visible)visible.textContent=filtered.length+' из '+brainRequestTrace.length+' записей';
+ const timeline=document.getElementById('monitor-timeline');
+ if(timeline){
+  timeline.replaceChildren();
+  const recent=[...filtered].reverse().slice(-24);
+  const peak=Math.max(1,...recent.map(e=>e.duration));
+  for(const entry of recent){
+   const bar=document.createElement('span');
+   bar.className='monitor-timeline-bar';
+   bar.dataset.error=String(entry.status===0||entry.status>=400);
+   bar.style.height=Math.max(6,Math.round(entry.duration/peak*100))+'%';
+   bar.title=entry.method+' '+entry.route+' · '+entry.duration+' мс';
+   timeline.append(bar);
+  }
+  timeline.setAttribute('aria-label',recent.length?'Длительность последних '+recent.length+' отфильтрованных запросов. Максимум '+peak+' мс.':'Нет данных для выбранного фильтра');
+ }
  list.replaceChildren();
- if(!brainRequestTrace.length){
+ if(!filtered.length){
   const empty=document.createElement('p');empty.className='brain-trace-empty';
-  empty.textContent='Запросов пока нет. Перейдите в другой раздел или обновите карту мозга.';
+  empty.textContent=brainRequestTrace.length?'По выбранному фильтру запросов нет.':'Запросов пока нет. Перейдите в другой раздел или обновите карту мозга.';
   list.append(empty);return;
  }
- for(const entry of brainRequestTrace){
+ for(const entry of filtered){
   const row=document.createElement('div');row.className='brain-trace-entry';
   const header=document.createElement('div');header.className='brain-trace-entry-header';
   const method=document.createElement('span');method.className='brain-trace-method';method.textContent=entry.method;
@@ -723,6 +757,7 @@ function setMobileMenu(open){
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
 }
+el('monitor-filter').addEventListener('change',renderBrainRequestTrace);
 el('brain-trace-clear').addEventListener('click',()=>{brainRequestTrace.length=0;renderBrainRequestTrace();});
 el('mobile-menu').addEventListener('click',()=>{
  const opening=!el('shell').classList.contains('menu-open');
