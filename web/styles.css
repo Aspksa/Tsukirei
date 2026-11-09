@@ -414,3 +414,29 @@
 .chat-thread mark{background:#8c6b32;color:#fff8eb;border-radius:3px;padding:1px 0}
 .chat-thread mark.current{background:#e4c27c;color:#21180d;box-shadow:0 0 0 2px #e4c27c55}
 @media(max-width:390px){.chat-search{gap:5px;padding:9px}.chat-search span{font-size:9px}.chat-search button{width:29px}}
+
+/* Moonlit Sanctuary — unified product-wide visual foundation */
+:root{
+ --bg:#0b0b13;--panel:#15141f;--panel2:#1e1b2b;--stroke:#393147;
+ --gold:#e6bf78;--gold-bright:#f6dda6;--text:#f4eff8;--muted:#b8b0c4;
+ --dim:#948ba1;--moon-lilac:#a494d5;--moon-rose:#e9b6cf;
+ --moon-radius:20px;--moon-shadow:0 20px 70px #05030b55;
+}
+html{scroll-behavior:smooth}
+body{background:radial-gradient(ellipse 60% 42% at 85% -8%,#55407835,transparent 70%),radial-gradient(ellipse 42% 30% at 12% 95%,#30234a26,transparent),var(--bg)}
+.sidebar{background:linear-gradient(180deg,#151120,#0d0c16);border-right-color:#46385088}
+.brand{background:radial-gradient(circle at 40% 30%,#6c4e78,#30203e 60%,#18121f);border-color:#c3a07166;box-shadow:0 0 35px #b495d322}
+.nav-button{transition:background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}
+.nav-button:hover{transform:translateY(-1px)}
+.nav-button.selected,.nav-button[aria-current="page"]{background:linear-gradient(135deg,#4a364b,#2c2333);border-color:#d2ad7455;color:#f3d6a0}
+.topbar{background:#12101be8;backdrop-filter:blur(16px);border-bottom-color:#44384c}
+.wordmark{font-family:Georgia,"Times New Roman",serif;letter-spacing:.12em}
+.page-heading h1,.hero h1{letter-spacing:-.035em}
+.glass-panel,.stat-card,.feature-card,.hero-card{border-color:#55445c88;box-shadow:var(--moon-shadow)}
+.glass-panel{background:linear-gradient(145deg,#201b2a,#15141e 75%);border-radius:var(--moon-radius)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #f6dda6;outline-offset:3px}
+::selection{background:#8d6eaa;color:#fff}
+.moon-skip{position:fixed;left:14px;top:-80px;z-index:1000;padding:12px 16px;border-radius:12px;background:#e6bf78;color:#1b1223;font-weight:700;text-decoration:none}
+.moon-skip:focus{top:12px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.nav-button{transition:none}.nav-button:hover{transform:none}}
+@media(max-width:760px){.glass-panel{border-radius:16px}.topbar{backdrop-filter:none}}
