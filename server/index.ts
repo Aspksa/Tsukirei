@@ -88,12 +88,13 @@ async function readState(): Promise<State> {
 // Serialise legacy writes; PostgreSQL uses SELECT ... FOR UPDATE inside a transaction.
 let legacyQueue: Promise<unknown> = Promise.resolve();
 async function mutateState<T>(change: (state: State) => T): Promise<T> {
-  if (database) { const result = await database.mutate(change); queueRagIndex(); return result; }
+  if (database) { const result = await database.mutate(change); queueRagIndex(); queueKnowledgeRefresh(); return result; }
   const pending = legacyQueue.then(() => {
     const state = readLegacyState();
     const result = change(state);
     saveAtomic(statePath, state);
     queueRagIndex();
+    queueKnowledgeRefresh();
     return result;
   });
   legacyQueue = pending.catch(() => {});
@@ -117,6 +118,16 @@ const identity=new IdentityCore(soul,supermind);
 const learning=new LearningCore(living,cognition);
 // Coordinate maintenance without overlapping runs or additional cloud calls.
 const background=new BackgroundScheduler();
+let knowledgeRefreshTimer:ReturnType<typeof setTimeout>|null=null;
+function queueKnowledgeRefresh(){
+  if(knowledgeRefreshTimer||shuttingDown)return;
+  knowledgeRefreshTimer=setTimeout(()=>{
+    knowledgeRefreshTimer=null;
+    void background.run('knowledge-check');
+  },15*1000);
+  knowledgeRefreshTimer.unref?.();
+}
+
 background.add({name:'living-tick',intervalMs:60*1000,run:()=>living.tick()});
 background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
   if(cloudBusy)return;
@@ -772,6 +783,7 @@ function shutdown(signal:string){
   shuttingDown=true;
   console.log('[Tsukirei] Завершение работы:',signal);
   // Stop scheduling before closing connections. Persistent files are never deleted.
+  if(knowledgeRefreshTimer){clearTimeout(knowledgeRefreshTimer);knowledgeRefreshTimer=null;}
   background.close();
   ragWorker?.close();
   living.close();
@@ -788,4 +800,5 @@ server.listen(port, '127.0.0.1', () => {
   const actualPort = address && typeof address !== 'string' ? address.port : port;
   console.log('[Tsukirei] Готово: http://127.0.0.1:' + actualPort + '/');
   console.log('[Tsukirei] Все данные хранятся локально: ' + dataDir);
+  queueKnowledgeRefresh();
 });
