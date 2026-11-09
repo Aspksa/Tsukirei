@@ -119,6 +119,26 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
     body:'Статус: остановлен\nТребуется подтверждение человеком.'
   });
   assert.ok([example,exactCopy,conflict].every(item=>item.status===201));
+  const cognitiveRun=await api(first.base,'/api/cognition/scan','POST',{});
+  assert.equal(cognitiveRun.status,200,JSON.stringify(cognitiveRun.data));
+  assert.ok(cognitiveRun.data.status.worldEdges>=1);
+  const worldModel=await api(first.base,'/api/cognition/world?q=memos');
+  assert.ok(worldModel.data.edges.some(e=>e.evidenceId==='note:'+example.data.note.id));
+  const factCandidates=await api(first.base,'/api/cognition/facts');
+  const candidate=factCandidates.data.items.find(f=>f.sourceId==='note:'+example.data.note.id&&
+    f.field==='Статус'&&f.value==='активен');
+  assert.ok(candidate,'Cognitive knowledge candidate must preserve its source');
+  const approved=await api(first.base,'/api/cognition/facts/'+candidate.id,'PATCH',{action:'confirm'});
+  assert.equal(approved.status,200);
+  const cognitiveGoal=await api(first.base,'/api/cognition/goals','POST',{
+    title:'Проверить память PostgreSQL',
+    objective:'Повторно проверить качество RAG и доступность PostgreSQL после перезапуска',
+    taskIds:[tasks[0].data.task.id]
+  });
+  assert.equal(cognitiveGoal.status,201,JSON.stringify(cognitiveGoal.data));
+  const recordTimeline=await api(first.base,'/api/cognition/timeline');
+  assert.equal(recordTimeline.status,200);
+  assert.ok(recordTimeline.data.items.some(x=>x.type==='fact'));
   const indexed=await awaitIndex(6);
   assert.ok(indexed.index.relations>=1,JSON.stringify(indexed.index));
   const graph=await api(first.base,'/api/rag/graph?q=MemOS');
@@ -188,6 +208,13 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   const persisted = await api(second.base, '/api/state');
   assert.equal(persisted.data.tasks.length, 12);
   assert.equal(persisted.data.notes.length, 4, 'Three curator test notes should persist across restart');
+  const cognitiveAfterRestart=await api(second.base,'/api/cognition');
+  assert.ok(cognitiveAfterRestart.data.metrics.scans>=1,'Cognition scan must persist in PostgreSQL mode');
+  const goalsAfterRestart=await api(second.base,'/api/cognition/goals');
+  assert.ok(goalsAfterRestart.data.items.some(g=>g.id===cognitiveGoal.data.goal.id));
+  const confirmedAfterRestart=await api(second.base,'/api/cognition/facts');
+  assert.equal(confirmedAfterRestart.data.items.find(f=>f.id===candidate.id).status,'confirmed');
+
   const docsAfterRestart=await api(second.base,'/api/rag/documents');
   assert.equal(docsAfterRestart.status,200);
   assert.ok(docsAfterRestart.data.items.some(doc=>doc.id===persistent.data.document.id));
