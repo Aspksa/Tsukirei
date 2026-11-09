@@ -178,9 +178,10 @@ export async function connectPostgres(dataDir: string) {
         return rows.length>0;
       },
       async searchRagDocuments(query:string, limit=35):Promise<RagSource[]> {
-        const tokens = (query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[]).slice(0,8);
-        if (!tokens.length) return [];
-        const terms = [...new Set(tokens)].join(' | ');
+        const tokens=keywords(query,12).slice(0,8);
+        if(!tokens.length)return [];
+        // GIN-backed prefix query covers Russian inflections without a model request.
+        const terms=[...new Set(tokens)].map(token=>token+':*').join(' | ');
         const rows=await sql`SELECT d.id,d.title,d.source,d.created_at,c.part,c.content
           FROM tsukirei_rag_chunks c JOIN tsukirei_rag_documents d ON d.id=c.document_id
           WHERE c.searchable @@ to_tsquery('simple', ${terms})
