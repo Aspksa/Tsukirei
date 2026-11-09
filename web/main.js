@@ -819,6 +819,13 @@ function renderMonitorTraceGraph(items){
    button.dataset.ok=String(item.status==='ok');
    const name=document.createElement('strong');name.textContent=String(item.stage||'Этап');
    const time=document.createElement('span');time.textContent=String(item.durationMs)+' мс';
+   if(item.stage==='Чтение истории'||item.stage==='Сохранение переписки'){
+    const backend=document.createElement('small');
+    backend.className='monitor-graph-backend';
+    const target=String(item.target||'');
+    backend.textContent=target.includes('PostgreSQL')?'PostgreSQL':target.includes('JSON')?'Локальный JSON':'Хранилище';
+    button.append(backend);
+   }
    button.append(name,time);
    button.addEventListener('click',()=>{
     graph.querySelectorAll('.monitor-graph-node').forEach(node=>node.setAttribute('aria-pressed','false'));

@@ -157,3 +157,10 @@ test('monitor stage detail links to source without exposing user content',()=>{
  assert.match(main,/link\.rel='noopener noreferrer'/);
  assert.match(css,/\.monitor-graph-detail a:focus-visible/);
 });
+
+test('monitor renders storage backend provenance from actual server stage target',()=>{
+ assert.match(main,/target\.includes\('PostgreSQL'\)/);
+ assert.match(main,/target\.includes\('JSON'\)/);
+ assert.match(main,/backend\.className='monitor-graph-backend'/);
+ assert.match(css,/\.monitor-graph-node \.monitor-graph-backend/);
+});
