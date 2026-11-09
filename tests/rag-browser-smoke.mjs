@@ -84,6 +84,14 @@ try{
  assert.equal(await evaluate("document.getElementById('page-search').hidden"),false);
  await evaluate("(()=>{const input=document.getElementById('rag-query');input.value='шпилька Subaru';document.getElementById('rag-search-form').requestSubmit();return true;})()");
  await until(()=>evaluate("document.querySelector('.rag-result-card h3')?.textContent.includes('Двигатель Impreza')"),'RAG search result');
+ await until(()=>evaluate("document.getElementById('rag-engine-badge')?.textContent.includes('PostgreSQL')"),'advanced panel');
+ const advanced=await evaluate("({engine:!!document.getElementById('rag-engine-status'),pauseDisabled:document.getElementById('rag-engine-pause').disabled,embeddingEnabled:document.getElementById('rag-embeddings-enabled').checked,autoEmbed:document.getElementById('rag-auto-embed').checked,rerankEnabled:document.getElementById('rag-rerank-enabled').checked,curator:!!document.getElementById('rag-curator-check'),graph:!!document.getElementById('rag-graph-form')})");
+ assert.equal(advanced.engine,true);
+ assert.equal(advanced.pauseDisabled,true,'Cannot start index without PostgreSQL');
+ assert.equal(advanced.embeddingEnabled,false,'Paid embeddings must start disabled');
+ assert.equal(advanced.autoEmbed,false,'Background AI must start disabled');
+ assert.equal(advanced.rerankEnabled,false,'Paid reranker must start disabled');
+ assert.equal(advanced.curator,true);assert.equal(advanced.graph,true);
  const result=await evaluate("({title:document.querySelector('.rag-result-card h3')?.textContent,meta:document.getElementById('rag-results-meta')?.textContent,hasImport:!!document.getElementById('rag-import-form'),hasChatToggle:!!document.getElementById('chat-use-memory'),hasCity:!!document.getElementById('page-city')})");
  assert.match(result.title,/Двигатель Impreza/);
  assert.equal(result.hasImport,true);assert.equal(result.hasChatToggle,true);
