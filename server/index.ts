@@ -131,6 +131,7 @@ function queueKnowledgeRefresh(){
 background.add({name:'living-tick',intervalMs:60*1000,run:()=>living.tick()});
 background.add({name:'personality-growth',intervalMs:24*60*60*1000,run:()=>soul.reviewGrowth()});
 background.add({name:'personality-character-evolution',intervalMs:24*60*60*1000,run:()=>soul.reviewCharacterEvolution()});
+background.add({name:'personality-commitment-watch',intervalMs:24*60*60*1000,run:()=>soul.reviewCommitments()});
 background.add({name:'personality-outreach',intervalMs:60*60*1000,run:()=>soul.prepareOutreach()});
 background.add({name:'personality-reflection-goals',intervalMs:60*60*1000,run:()=>soul.reflectOnGoals()});
 background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
@@ -485,6 +486,17 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       throw new HttpError(400,'Укажите approve, verify, reject либо rollback');
     try{json(res,200,{idea:await living.decide(id,input.action,input.note)});}
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
+    return;
+  }
+  if (method === 'GET' && pathname === '/api/soul/commitment-watch') {
+    json(res,200,soul.commitmentWatchReport());return;
+  }
+  if (method === 'POST' && pathname.startsWith('/api/soul/commitment-watch/') && pathname.endsWith('/dismiss')) {
+    const id=pathname.slice('/api/soul/commitment-watch/'.length,-'/dismiss'.length);
+    if(!validId(id))throw new HttpError(400,'Некорректный идентификатор');
+    await bodyJson(req);
+    try{json(res,200,await soul.dismissCommitmentWatch(id));}
+    catch(error){throw new HttpError(404,error instanceof Error?error.message:'Напоминание не найдено');}
     return;
   }
   if (method === 'GET' && pathname === '/api/soul/commitments') {
