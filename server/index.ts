@@ -12,6 +12,7 @@ import { SoulEngine } from './soul.ts';
 import { LivingCore } from './living.ts';
 import { CognitiveCore, assessEvidence } from './cognition.ts';
 import { SuperMind, assessIntent } from './supermind.ts';
+import { BackgroundScheduler } from './background-scheduler.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -111,6 +112,14 @@ const living=new LivingCore(dataDir,{
 const supermind=new SuperMind(dataDir,{
   read:readState,soul:()=>soul.overview(),cognitive:cognition,living
 });
+// Coordinate maintenance without overlapping runs or additional cloud calls.
+const background=new BackgroundScheduler();
+background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
+  if(cloudBusy)return;
+  await cognition.scan();
+  await supermind.scan();
+}});
+background.add({name:'rag-index-watch',intervalMs:5*60*1000,run:()=>{ragWorker?.schedule();}});
 function readCloud(): CloudSettings {
   if (!existsSync(cloudPath)) return { apiKey: '', model: '' };
   const value = JSON.parse(readFileSync(cloudPath, 'utf8')) as CloudSettings;
