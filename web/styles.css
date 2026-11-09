@@ -271,3 +271,17 @@
 .brain-links .ghost-button{min-height:40px}
 @media(max-width:1100px){.brain-workspaces{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.brain-workspaces{grid-template-columns:1fr}.brain-workspace{padding:21px}}
+
+/* Live brain visualization: read-only knowledge metrics, responsive layout. */
+.brain-live{padding:24px;margin-bottom:18px}
+.brain-live-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brain-live-header h2{font-size:20px;margin-top:8px}
+.brain-metrics{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:20px 0}
+.brain-metric{border:1px solid rgba(196,158,89,.22);border-radius:12px;padding:13px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.brain-metric strong{font-size:23px;color:#e1bd79;font-variant-numeric:tabular-nums}
+.brain-metric span,.brain-footnote{font-size:12px;color:var(--muted)}
+.brain-map{background:radial-gradient(ellipse at center,rgba(172,132,57,.10),transparent 70%);border-radius:12px;overflow:hidden}
+.brain-map svg{display:block;width:100%;height:auto;max-height:280px}
+.brain-footnote{margin-top:12px;line-height:1.6}
+@media(max-width:800px){.brain-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:460px){.brain-live{padding:16px}.brain-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
