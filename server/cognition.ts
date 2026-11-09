@@ -295,6 +295,41 @@ export class CognitiveCore{
       duplicateGroups:this.dreams(),automaticDeletion:false,automaticConfirmation:false};
   }
 
+
+  reviewQueue(now:Date=new Date()){
+    const report=this.hygiene(now);
+    const queue=[
+      ...report.conflicts.map(item=>({kind:'conflict' as const,priority:1,key:item.key,
+        sourceIds:item.sourceIds,description:'Подтверждённые источники противоречат друг другу'})),
+      ...report.missing.map(item=>({kind:'missing' as const,priority:2,key:item.key,
+        sourceIds:[item.sourceId],description:'Исходная запись недоступна'})),
+      ...report.stale.map(item=>({kind:'stale' as const,priority:3,key:item.key,
+        sourceIds:[item.sourceId],description:'Проверить актуальность факта старше 180 дней'})),
+      ...report.duplicateGroups.map(item=>({kind:'duplicate' as const,priority:4,key:item.id,
+        sourceIds:item.sourceIds,description:'Повторяющиеся записи, оригиналы сохранены'}))
+    ].sort((a,b)=>a.priority-b.priority||a.key.localeCompare(b.key)).slice(0,200);
+    return {generatedAt:now.toISOString(),items:queue,requiresOwnerReview:true,
+      automaticDeletion:false,automaticConfirmation:false};
+  }
+  consolidatedKnowledge(){
+    const groups=new Map<string,Fact[]>();
+    for(const fact of this.data.facts.filter(f=>f.status==='confirmed')){
+      const key=fact.key+'\u0000'+fact.value.trim().toLowerCase();
+      groups.set(key,[...(groups.get(key)||[]),fact]);
+    }
+    return [...groups.values()].map(facts=>({
+      key:facts[0].key,value:facts[0].value,
+      factIds:facts.map(f=>f.id),
+      sourceIds:[...new Set(facts.map(f=>f.sourceId))],
+      observedAt:facts.map(f=>f.observedAt).sort().at(-1)??null
+    })).slice(0,240);
+  }
+  growthHistory(limit=80){
+    return {lastScanAt:this.data.lastScanAt,metrics:{...this.data.metrics},
+      events:this.data.traces.slice(0,Math.min(125,Math.max(1,limit)))
+        .map(t=>({at:t.at,stage:t.stage,detail:t.detail,itemCount:t.itemCount}))};
+  }
+
   async scan(force=false){
     if(this.busy)return {skipped:'Идёт другая локальная проверка'};
     this.busy=true;const t=Date.now();
