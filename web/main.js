@@ -1,6 +1,6 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', settings: 'Настройки' };
+const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
@@ -66,6 +66,7 @@ function go(page) {
   window.location.hash = page;
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
   if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
+  if (page === 'living') globalThis.TsukireiLivingUI?.refresh();
 }
 function renderStatus() {
   const settings = viewState.settings;
