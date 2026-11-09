@@ -341,3 +341,6 @@
 .brain-map-navigation button{border:1px solid #51402d;background:#241e19;color:#eed0a0;border-radius:9px;min-width:34px;min-height:34px;padding:6px 11px;font-size:13px}
 .brain-map-navigation span{color:var(--muted);font-size:11px}
 #brain-map-svg{touch-action:none;user-select:none}
+
+.brain-load-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:10px 0}
+.brain-load-controls span{color:var(--muted);font-size:11px}

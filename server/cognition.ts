@@ -268,9 +268,18 @@ export class CognitiveCore{
   }
   world(query='',limit=100){
     const q=shorten(query,70).toLowerCase();
-    const edges=this.data.edges.filter(e=>!q||e.from.includes(q)||e.to.includes(q)).slice(0,Math.min(limit,150));
-    const refs=new Set(edges.flatMap(e=>[e.from,e.to]));
-    return {edges,nodes:this.data.nodes.filter(n=>!q||refs.has(n.id)||n.label.toLowerCase().includes(q)).slice(0,180),
+    const max=Math.min(350,Math.max(1,Math.trunc(Number.isFinite(limit)?limit:100)));
+    const matched=this.data.nodes.filter(n=>!q||n.id.toLowerCase().includes(q)||n.label.toLowerCase().includes(q));
+    const matchedIds=new Set(matched.map(n=>n.id));
+    const relevantEdges=this.data.edges.filter(e=>!q||
+      matchedIds.has(e.from)||matchedIds.has(e.to)||
+      e.relation.toLowerCase().includes(q));
+    const linked=new Set(relevantEdges.flatMap(e=>[e.from,e.to]));
+    const candidates=this.data.nodes.filter(n=>!q||matchedIds.has(n.id)||linked.has(n.id));
+    const nodes=candidates.slice(0,max);
+    const visible=new Set(nodes.map(n=>n.id));
+    const edges=relevantEdges.filter(e=>visible.has(e.from)&&visible.has(e.to)).slice(0,350);
+    return {edges,nodes,totalNodes:candidates.length,hasMore:candidates.length>nodes.length,
       note:'Только отношения, явно извлечённые из источников и связи утверждённых пользователем целей.'};
   }
   dreams(){return this.data.dreams.slice(0,70);}
