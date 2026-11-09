@@ -130,6 +130,7 @@ function queueKnowledgeRefresh(){
 
 background.add({name:'living-tick',intervalMs:60*1000,run:()=>living.tick()});
 background.add({name:'personality-growth',intervalMs:24*60*60*1000,run:()=>soul.reviewGrowth()});
+background.add({name:'personality-character-evolution',intervalMs:24*60*60*1000,run:()=>soul.reviewCharacterEvolution()});
 background.add({name:'personality-outreach',intervalMs:60*60*1000,run:()=>soul.prepareOutreach()});
 background.add({name:'personality-reflection-goals',intervalMs:60*60*1000,run:()=>soul.reflectOnGoals()});
 background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
@@ -485,6 +486,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try{json(res,200,{idea:await living.decide(id,input.action,input.note)});}
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
+  }
+  if (method === 'GET' && pathname === '/api/soul/character-evolution') {
+    json(res,200,soul.characterEvolutionReport());return;
   }
   if (method === 'GET' && pathname === '/api/soul/experience-decision') {
     json(res,200,soul.experienceDecision());return;
