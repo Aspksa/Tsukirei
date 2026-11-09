@@ -1,0 +1,19 @@
+name: RAG browser smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install project
+        run: npm ci --no-audit --no-fund
+      - name: Real browser test of RAG interface
+        run: node tests/rag-browser-smoke.mjs
