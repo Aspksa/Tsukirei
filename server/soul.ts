@@ -20,6 +20,7 @@ type SoulSettings = {
   reflectionsEnabled:boolean; initiativeEnabled:boolean;
 };
 type Metrics = { chatsObserved:number; positiveFeedback:number; negativeFeedback:number; confirmedPreferences:number; lessons:number; proposals:number; appliedCorrections:number; completedTasks:number };
+type SoulGoal = {id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'active'|'completed'|'cancelled';steps:Array<{id:string;title:string;status:'pending'|'completed';evidenceId?:string}>};
 type SoulData = {
   version:1;
   settings:SoulSettings;
@@ -34,6 +35,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
+  plannedGoals?:SoulGoal[];
   commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string;linkedTaskId?:string}>;
   commitmentWatch?:{lastRunAt:string|null;items:Array<{id:string;commitmentId:string;createdAt:string;reason:string;status:'pending'|'dismissed';sourceId:string}>};
   characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
@@ -67,7 +69,7 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],commitmentWatch:{lastRunAt:null,items:[]},
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],plannedGoals:[],commitmentWatch:{lastRunAt:null,items:[]},
     characterEvolution:{lastReviewedAt:null,history:[]},
     outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
@@ -83,6 +85,7 @@ function validate(value:unknown):SoulData {
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
   if(!Array.isArray(state.commitments))state.commitments=[];
+  if(!Array.isArray(state.plannedGoals))state.plannedGoals=[];
   if(!state.commitmentWatch||!Array.isArray(state.commitmentWatch.items))state.commitmentWatch={lastRunAt:null,items:[]};
   if(!state.characterEvolution||!Array.isArray(state.characterEvolution.history))state.characterEvolution={lastReviewedAt:null,history:[]};
   if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
@@ -205,6 +208,7 @@ export class SoulEngine {
         note:'Обязательства добавляются явно. Выполнение требует источника подтверждения, не выводится из текста ответа.'},
       interests:preferences.map(p=>p.text).slice(0,5),
       aspirations:goals.map(g=>({title:g.title,reason:g.reason,sourceIds:g.sourceIds})),
+      plannedGoals:enabled?(d.plannedGoals??[]).filter(g=>g.status==='active').slice(0,5).map(g=>({title:g.title,completed:g.steps.filter(s=>s.status==='completed').length,total:g.steps.length})):[],
       imagination:{futureScenarios:goals.slice(0,3).map(g=>({idea:'Если устранить проблему: '+g.title,assumption:'Требует проверки, не предсказание'}))},
       autonomy:{proposals:initiatives.map(i=>({title:i.title,reason:i.reason,sourceIds:i.sourceIds})),
         actionsRequireApproval:true},
@@ -261,6 +265,61 @@ export class SoulEngine {
       if(detail)item.note=detail;
       this.journal('reflection','Обязательство: '+status+' — '+item.title.slice(0,120),evidence||item.sourceId);
       return {...item,evidenceIds:[...item.evidenceIds]};
+    });
+  }
+  plannedGoalsReport(){
+    if(!this.data.settings.personalContext)return {items:[],policy:'Персональный контекст отключён'};
+    return {items:(this.data.plannedGoals??[]).slice(0,60).map(g=>({
+      ...g,steps:g.steps.map(s=>({...s})),
+      progress:{completed:g.steps.filter(s=>s.status==='completed').length,total:g.steps.length}
+    })),policy:'Шаги выполняются только после подтверждения; предложения не запускают действий.'};
+  }
+  createPlannedGoal(title:unknown,sourceId:unknown,steps:unknown){
+    const clean=bounded(title,180,'Цель'),source=bounded(sourceId,120,'Источник');
+    if(!/^(chat|task|manual):[A-Za-z0-9_.-]{1,100}$/u.test(source)||BEHAVIOR_INJECTION.test(clean))
+      throw new Error('Некорректная цель или источник');
+    if(!Array.isArray(steps)||steps.length<1||steps.length>12)throw new Error('Нужно от 1 до 12 шагов');
+    const names=steps.map(s=>bounded(s,180,'Шаг'));
+    if(names.some(s=>BEHAVIOR_INJECTION.test(s))||new Set(names).size!==names.length)
+      throw new Error('Повторяющиеся или небезопасные шаги');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const existing=(this.data.plannedGoals??[]).find(g=>g.sourceId===source&&g.title===clean);
+      if(existing)return existing;
+      const at=new Date().toISOString();
+      const goal:SoulGoal={id:randomUUID(),title:clean,sourceId:source,createdAt:at,updatedAt:at,
+        status:'proposed',steps:names.map(title=>({id:randomUUID(),title,status:'pending'}))};
+      this.data.plannedGoals=[goal,...(this.data.plannedGoals??[])].slice(0,60);
+      return goal;
+    });
+  }
+  decidePlannedGoal(id:string,status:'active'|'cancelled'){
+    if(!['active','cancelled'].includes(status))throw new Error('Некорректный статус');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const goal=(this.data.plannedGoals??[]).find(g=>g.id===id);
+      if(!goal)throw new Error('Цель не найдена');
+      if(status==='active'&&goal.status!=='proposed')throw new Error('Цель уже активирована');
+      if(status==='cancelled'&&!['proposed','active'].includes(goal.status))throw new Error('Цель уже завершена');
+      goal.status=status;goal.updatedAt=new Date().toISOString();
+      return goal;
+    });
+  }
+  completePlannedStep(goalId:string,stepId:string,evidenceId:unknown){
+    const source=bounded(evidenceId,120,'Подтверждение');
+    if(!/^(chat|task|manual):[A-Za-z0-9_.-]{1,100}$/u.test(source))throw new Error('Некорректное подтверждение');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const goal=(this.data.plannedGoals??[]).find(g=>g.id===goalId);
+      if(!goal||goal.status!=='active')throw new Error('Цель не активна');
+      const step=goal.steps.find(s=>s.id===stepId);
+      if(!step)throw new Error('Шаг не найден');
+      if(step.status==='completed')return goal;
+      step.status='completed';step.evidenceId=source;
+      if(goal.steps.every(s=>s.status==='completed'))goal.status='completed';
+      goal.updatedAt=new Date().toISOString();
+      this.journal('growth','Подтверждён шаг цели: '+step.title.slice(0,100),source);
+      return goal;
     });
   }
   commitmentWatchReport(){
