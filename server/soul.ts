@@ -178,7 +178,7 @@ export class SoulEngine {
     const goals=d.settings.reflectionsEnabled&&enabled?(d.reflectionGoals?.history??[]).filter(g=>g.state==='needs-review').slice(0,6):[];
     const initiatives=d.settings.initiativeEnabled&&enabled?d.initiatives.filter(i=>i.status==='new').slice(0,6):[];
     const meaningful=journal.filter(j=>['task','feedback','preference','reflection','growth'].includes(j.type));
-    const latestFeedback=(d.feedbackEvents??[]).filter(e=>{const age=now.getTime()-Date.parse(e.at);return age>=0&&age<=7*86400000;});
+    const latestFeedback=(enabled?(d.feedbackEvents??[]):[]).filter(e=>{const age=now.getTime()-Date.parse(e.at);return age>=0&&age<=7*86400000;});
     const positives=latestFeedback.filter(e=>e.rating==='positive').length;
     const negatives=latestFeedback.filter(e=>e.rating==='negative').length;
     const mood=negatives>=2&&negatives>positives?'сосредоточенный':positives>=2&&positives>negatives?'воодушевлённый':'спокойный';
