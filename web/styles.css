@@ -648,3 +648,11 @@ img,svg,video,canvas{max-width:100%}
 .monitor-insight-card p{color:#f4eff8;font-size:13px;line-height:1.5;margin:0}
 .monitor-insight-share{align-self:flex-start;color:#bde6eb;background:#243c47;border:1px solid #6999a6;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700}
 .monitor-insight-card small{color:#b8b0c4;font-size:11px;line-height:1.5}
+
+/* Privacy-first diagnostic report action */
+.monitor-report-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:15px 17px;background:linear-gradient(110deg,#30243f,#1d1a2c);border:1px solid #766086;border-radius:15px;margin:16px 0 5px}
+.monitor-report-actions strong{color:#f0d5a0;font-size:13px}
+.monitor-report-actions p{color:#b8b0c4;font-size:11px;line-height:1.5;margin:5px 0 0}
+.monitor-report-actions .ghost-button{flex-shrink:0}
+.monitor-report-status{font-size:11px;color:#bde6eb;min-height:1.3em;margin:5px 0 12px}
+@media(max-width:520px){.monitor-report-actions .ghost-button{width:100%}}

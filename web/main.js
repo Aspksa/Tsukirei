@@ -939,6 +939,31 @@ function renderMonitorServerSteps(){
   row.append(stage,target,detail);list.append(row);
  }
 }
+function monitorSafeReport(items){
+ const lines=['Tsukirei · локальная диагностика','Только технические метаданные; без текста диалогов и содержимого памяти.',''];
+ for(const item of items){
+  const backend=String(item.target||'').includes('PostgreSQL')?'PostgreSQL':String(item.target||'').includes('JSON')?'JSON':'';
+  const stage=String(item.stage||'Этап').replace(/[\r\n]/g,' ').slice(0,90);
+  const time=Number(item.durationMs);
+  const ms=Number.isFinite(time)?Math.max(0,Math.round(time)):0;
+  const status=item.status==='ok'?'OK':'ERROR';
+  const at=Number.isFinite(Date.parse(item.at))?new Date(item.at).toISOString():'—';
+  lines.push(at+' | '+stage+' | '+status+' | '+ms+' мс'+(backend?' | '+backend:'')+(item.parentStage?' | вложенный этап':''));
+ }
+ return lines.join('\n');
+}
+el('monitor-report-copy').addEventListener('click',async()=>{
+ const status=el('monitor-report-status');
+ const selected=el('monitor-trace-select').value;
+ const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
+ if(!items.length){status.textContent='Нет записей для копирования.';return;}
+ try{
+  await navigator.clipboard.writeText(monitorSafeReport(items));
+  status.textContent='Отчёт скопирован: '+items.length+' этапов. Тексты сообщений не включены.';
+ }catch{
+  status.textContent='Не удалось скопировать. Проверьте разрешение буфера обмена.';
+ }
+});
 el('monitor-trace-select').addEventListener('change',renderMonitorServerSteps);
 el('monitor-server-refresh').addEventListener('click',refreshMonitorServerSteps);
 el('monitor-filter').addEventListener('change',renderBrainRequestTrace);

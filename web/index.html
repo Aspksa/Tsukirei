@@ -72,6 +72,8 @@
             <div class="brain-trace-flow" aria-hidden="true"><span>Интерфейс</span><b>→</b><span>Локальный API</span><b>→</b><span>Модуль / обработчик</span></div>
             <div class="monitor-server-head"><div><h3>Этапы обработки ответа</h3><p>Подтверждённые сервером события: чтение истории, поиск памяти и запрос модели. Только метаданные.</p></div><button type="button" class="ghost-button" id="monitor-server-refresh">Обновить этапы</button></div>
             <div class="monitor-trace-picker"><label for="monitor-trace-select">Цепочка запроса</label><select id="monitor-trace-select"><option value="all">Все запросы</option></select><span id="monitor-trace-count">0 этапов</span></div>
+            <div class="monitor-report-actions"><div><strong>Диагностический отчёт</strong><p>Только этапы, время и статус. Без сообщений и содержимого памяти.</p></div><button class="ghost-button" type="button" id="monitor-report-copy">Скопировать отчёт</button></div>
+            <p id="monitor-report-status" class="monitor-report-status" role="status" aria-live="polite"></p>
             <div class="monitor-graph-head"><h3>Карта выполнения</h3><span>Только зарегистрированные этапы · без вымышленных связей</span></div>
             <div class="monitor-waterfall-head"><h3>Временная шкала</h3><span>Начало и длительность зарегистрированных этапов</span></div>
             <div id="monitor-performance-insights" class="monitor-performance-insights" aria-live="polite"><p class="brain-trace-empty">Анализ появится после запроса чата.</p></div>

@@ -190,3 +190,11 @@ test('performance insight excludes nested RAG from denominator',()=>{
  assert.match(main,/renderMonitorPerformanceInsights\(groups\)/);
  assert.match(css,/\.monitor-insight-card\{/);
 });
+
+test('privacy-first monitor report excludes targets and user payloads',()=>{
+ assert.match(app,/id="monitor-report-copy"/);
+ assert.match(main,/function monitorSafeReport\(items\)/);
+ assert.match(main,/navigator\.clipboard\.writeText\(monitorSafeReport\(items\)\)/);
+ assert.doesNotMatch(main.slice(main.indexOf('function monitorSafeReport'),main.indexOf("el('monitor-report-copy')")) ,/item\.prompt|item\.content|item\.target\s*\+/);
+ assert.match(css,/\.monitor-report-actions\{/);
+});
