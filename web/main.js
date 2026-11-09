@@ -787,6 +787,9 @@ async function refreshMonitorServerSteps(){
  }
 }
 function monitorStageSource(stage){
+ if(stage==='Кэш памяти')return 'server/rag-advanced.ts';
+ if(stage==='Векторизация запроса'||stage==='Ранжирование')return 'server/rag-provider.ts';
+ if(stage==='Чтение для поиска'||stage==='Поиск по знаниям')return 'server/rag-engine.ts';
  if(stage==='Обработка опыта')return 'server/soul.ts';
  if(stage==='Поиск памяти')return 'server/index.ts · askRag()';
  if(stage==='Чтение истории'||stage==='Сохранение переписки')return 'server/index.ts · хранилище состояния';
@@ -817,6 +820,7 @@ function renderMonitorTraceGraph(items){
    if(i>0){const arrow=document.createElement('span');arrow.className='monitor-graph-arrow';arrow.textContent='→';arrow.setAttribute('aria-hidden','true');track.append(arrow);}
    const button=document.createElement('button');button.type='button';button.className='monitor-graph-node';
    button.dataset.ok=String(item.status==='ok');
+   button.dataset.kind=/памят|поиск|ранжирован|векторизац|кэш/i.test(String(item.stage||''))?'rag':'core';
    const name=document.createElement('strong');name.textContent=String(item.stage||'Этап');
    const time=document.createElement('span');time.textContent=String(item.durationMs)+' мс';
    if(item.stage==='Чтение истории'||item.stage==='Сохранение переписки'){
@@ -836,7 +840,11 @@ function renderMonitorTraceGraph(items){
     const source=document.createElement('p');
     source.textContent='Связанный исходный код: '+monitorStageSource(String(item.stage||''));
     const link=document.createElement('a');
-    link.href='https://github.com/Aspksa/Tsukirei/blob/main/'+(item.stage==='Обработка опыта'?'server/soul.ts':'server/index.ts');
+    const sourceFile=item.stage==='Обработка опыта'?'server/soul.ts':
+      item.stage==='Кэш памяти'?'server/rag-advanced.ts':
+      (item.stage==='Векторизация запроса'||item.stage==='Ранжирование')?'server/rag-provider.ts':
+      (item.stage==='Чтение для поиска'||item.stage==='Поиск по знаниям')?'server/rag-engine.ts':'server/index.ts';
+    link.href='https://github.com/Aspksa/Tsukirei/blob/main/'+sourceFile;
     link.target='_blank';link.rel='noopener noreferrer';
     link.textContent='Открыть исходный файл';
     detail.append(line,source,link);
