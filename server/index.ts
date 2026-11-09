@@ -11,6 +11,7 @@ import { RagWorker } from './rag-worker.ts';
 import { SoulEngine } from './soul.ts';
 import { LivingCore } from './living.ts';
 import { CognitiveCore, assessEvidence } from './cognition.ts';
+import { SuperMind, assessIntent } from './supermind.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -105,7 +106,10 @@ const living=new LivingCore(dataDir,{
   cloud:()=>({...readCloud(),endpoint}),
   busy:()=>cloudBusy,
   indexed:async()=>database?database.ragInspect(12):[],
-  cognitiveScan:()=>cognition.scan()
+  cognitiveScan:async()=>{await cognition.scan();await supermind.scan();}
+});
+const supermind=new SuperMind(dataDir,{
+  read:readState,soul:()=>soul.overview(),cognitive:cognition,living
 });
 function readCloud(): CloudSettings {
   if (!existsSync(cloudPath)) return { apiKey: '', model: '' };
@@ -195,7 +199,7 @@ async function chat(prompt: string, useMemory = true) {
     }
     const messages = [
       {role:'system',content:soul.prompt(useMemory)+
-        (useMemory?'\n'+living.prompt()+'\n'+cognition.prompt():'')+'\n'+
+        (useMemory?'\n'+living.prompt()+'\n'+cognition.prompt()+'\n'+supermind.prompt():'')+'\n'+
         (assessment&&assessment.level==='insufficient'?
           'Локальные источники плохо покрывают вопрос; явно отделяй гипотезы от проверенных сведений.\n':'')+
         'Ты Цукирэй, полезная персональная ИИ-помощница. Отвечай по-русски. '+
@@ -232,6 +236,8 @@ async function chat(prompt: string, useMemory = true) {
     // must not conceal a successfully delivered and archived chat response.
     try { await soul.observeExchange(userId,prompt,answer.trim()); }
     catch(error) { console.warn('[Soul] Не удалось обработать опыт:',error instanceof Error?error.message:String(error)); }
+    void supermind.scan().catch(error=>console.warn('[SuperMind] Не удалось обновить историю:',
+      error instanceof Error?error.message:String(error)));
     return {
       answer:answer.trim(),messages:archive,
       sources:publicSources(grounded.hits),
@@ -250,12 +256,68 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method !== 'GET' && method !== 'HEAD') living.touch();
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '1.1.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '1.2.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
   if (method === 'GET' && pathname === '/api/state') {
     const state = await readState();
     json(res, 200, { ...state, messages: state.messages.slice(-250), settings: settingsPublic(), agents: [],
       database: { engine: database ? 'PostgreSQL + pgvector' : 'JSON (legacy)', connected: Boolean(database) } }); return;
+  }
+  if (method === 'GET' && pathname === '/api/supermind') {
+    json(res,200,await supermind.workspace());return;
+  }
+  if (method === 'GET' && pathname === '/api/supermind/autobiography') {
+    json(res,200,supermind.autobiography());return;
+  }
+  if (method === 'POST' && pathname === '/api/supermind/scan') {
+    await bodyJson(req);
+    json(res,200,{result:await supermind.scan(true),status:supermind.status()});return;
+  }
+  if (method === 'PATCH' && pathname === '/api/supermind/settings') {
+    const input=await bodyJson(req);
+    try{json(res,200,{settings:await supermind.settings(input)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Некорректные настройки');}
+    return;
+  }
+  if (method === 'POST' && pathname === '/api/supermind/intent') {
+    const input=await bodyJson(req);
+    json(res,200,assessIntent(requiredText(input.text,'Текст',1500)));return;
+  }
+  if (method === 'POST' && pathname === '/api/supermind/inquiries') {
+    const input=await bodyJson(req);
+    try{json(res,201,{inquiry:await supermind.newInquiry(input)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Некорректное исследование');}
+    return;
+  }
+  if (method === 'PATCH' && pathname.startsWith('/api/supermind/inquiries/')) {
+    const ids=pathname.slice('/api/supermind/inquiries/'.length).split('/hypotheses/');
+    if(ids.length!==2||!validId(ids[0])||!validId(ids[1]))
+      throw new HttpError(400,'Неверные идентификаторы исследования');
+    const input=await bodyJson(req);
+    try{json(res,200,{hypothesis:await supermind.testHypothesis(ids[0],ids[1],input)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Не удалось сохранить проверку');}
+    return;
+  }
+  if (method === 'POST' && pathname === '/api/supermind/scenarios') {
+    const input=await bodyJson(req);
+    try{json(res,201,{scenario:await supermind.compareStrategies(input)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Некорректные варианты');}
+    return;
+  }
+  if (method === 'POST' && pathname === '/api/supermind/wisdom') {
+    const input=await bodyJson(req);
+    try{json(res,201,{principle:await supermind.approveWisdom(input)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Недостаточно подтверждений');}
+    return;
+  }
+  if (method === 'PATCH' && pathname.startsWith('/api/supermind/wisdom/')) {
+    const id=pathname.slice('/api/supermind/wisdom/'.length);
+    if(!validId(id))throw new HttpError(400,'Неверный идентификатор принципа');
+    const input=await bodyJson(req);
+    if(input.action!=='revoke')throw new HttpError(400,'Разрешён только откат revoke');
+    try{json(res,200,{principle:await supermind.revokeWisdom(id)});}
+    catch(e){throw new HttpError(400,e instanceof Error?e.message:'Принцип не найден');}
+    return;
   }
   if (method === 'GET' && pathname === '/api/cognition') {
     json(res,200,cognition.status());return;
@@ -650,6 +712,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
   if (method === 'GET' && pathname === '/cognition.js') {
     staticFile(res, join(root, 'web', 'cognition.js'), 'text/javascript; charset=utf-8'); return;
+  }
+  if (method === 'GET' && pathname === '/supermind.js') {
+    staticFile(res, join(root, 'web', 'supermind.js'), 'text/javascript; charset=utf-8'); return;
   }
   if (method === 'GET' && pathname === '/mark.svg') {
     staticFile(res, join(root, 'web', 'mark.svg'), 'image/svg+xml'); return;
