@@ -109,7 +109,7 @@ const living=new LivingCore(dataDir,{
   busy:()=>cloudBusy,
   indexed:async()=>database?database.ragInspect(12):[],
   cognitiveScan:async()=>{await cognition.scan();await supermind.scan();}
-});
+},false);
 const supermind=new SuperMind(dataDir,{
   read:readState,soul:()=>soul.overview(),cognitive:cognition,living
 });
@@ -117,6 +117,7 @@ const identity=new IdentityCore(soul,supermind);
 const learning=new LearningCore(living,cognition);
 // Coordinate maintenance without overlapping runs or additional cloud calls.
 const background=new BackgroundScheduler();
+background.add({name:'living-tick',intervalMs:60*1000,run:()=>living.tick()});
 background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
   if(cloudBusy)return;
   await learning.verify();

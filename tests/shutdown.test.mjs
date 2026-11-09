@@ -18,3 +18,8 @@ test('termination handlers are registered once and shutdown is idempotent',()=>{
  assert.match(server,/process.once\('SIGINT'/);
  assert.match(server,/process.once\('SIGTERM'/);
 });
+
+test('living maintenance is owned by the shared scheduler',()=>{
+ assert.match(server,/name:'living-tick',intervalMs:60\*1000,run:\(\)=>living\.tick\(\)/);
+ assert.match(server,/cognitiveScan:async\(\)=>\{await cognition\.scan\(\);await supermind\.scan\(\);\}\s*\},false\)/);
+});
