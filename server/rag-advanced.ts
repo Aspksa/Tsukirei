@@ -83,7 +83,9 @@ export function smartContext(query:string,hits:RagHit[]){
 export class RagCache<T> {
   private values=new Map<string,{value:T;until:number}>();
   hits=0;misses=0;
-  constructor(private max=128,private ttlMs=90000){}
+  private max:number;
+  private ttlMs:number;
+  constructor(max=128,ttlMs=90000){this.max=max;this.ttlMs=ttlMs;}
   get(key:string):T|undefined {
     const item=this.values.get(key);
     if(!item||item.until<Date.now()){this.values.delete(key);this.misses++;return;}
