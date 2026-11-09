@@ -1,6 +1,6 @@
 {
   "name": "tsukirei",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "Portable local-first personal AI workspace",
@@ -11,7 +11,7 @@
     "dev": "node --experimental-strip-types server/index.ts",
     "start": "node --experimental-strip-types server/index.ts",
     "build": "npm run check",
-    "check": "node --check web/main.js && node --experimental-strip-types --check server/index.ts && node --experimental-strip-types --check server/postgres.ts",
+    "check": "node --check web/main.js && node --experimental-strip-types --check server/index.ts && node --experimental-strip-types --check server/postgres.ts && node --experimental-strip-types --check server/rag.ts && node --experimental-strip-types --check server/rag-engine.ts && node --experimental-strip-types --check server/rag-advanced.ts && node --experimental-strip-types --check server/rag-provider.ts && node --experimental-strip-types --check server/rag-worker.ts",
     "test": "node --test tests/*.test.mjs",
     "test:postgres": "node --test tests/postgres.test.mjs"
   },
