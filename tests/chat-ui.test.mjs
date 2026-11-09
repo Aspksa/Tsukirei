@@ -27,3 +27,13 @@ test('send state and draft preservation are explicit',()=>{
  assert.match(js,/updateChatCounter/);
  assert.match(js,/if \(!viewState\.settings\.configured\)/);
 });
+
+test('chat v2 includes message copy, scroll affordance and expanding composer',()=>{
+ assert.match(html,/id="chat-jump"/);
+ assert.match(html,/class="chat-thread-wrap"/);
+ assert.match(js,/navigator\.clipboard\.writeText\(message\.content\)/);
+ assert.match(js,/function resizeChatInput\(/);
+ assert.match(js,/function updateChatJump\(/);
+ assert.match(js,/chatScrollPinned/);
+ assert.match(css,/\.chat-jump\[hidden\]\{display:none\}/);
+});

@@ -480,6 +480,18 @@ function renderTasks() {
     list.append(row);
   });
 }
+let chatScrollPinned=false;
+function updateChatJump(){
+ const list=el('chat-thread'),jump=el('chat-jump');
+ const distant=list.scrollHeight-list.scrollTop-list.clientHeight>110;
+ jump.hidden=!distant;
+ chatScrollPinned=distant;
+}
+function resizeChatInput(){
+ const input=el('chat-input');
+ input.style.height='auto';
+ input.style.height=Math.min(input.scrollHeight,160)+'px';
+}
 function renderChat() {
   const list = el('chat-thread');
   list.replaceChildren();
@@ -516,6 +528,14 @@ function renderChat() {
     const bubble = escapeNotNeeded('div', 'message ' + (message.role === 'user' ? 'message-user' : 'message-ai'));
     bubble.append(escapeNotNeeded('small', '', message.role === 'user' ? 'Вы' : 'Цукирэй'));
     bubble.append(escapeNotNeeded('p', '', message.content));
+    const messageTools=escapeNotNeeded('div','chat-message-tools');
+    const copy=escapeNotNeeded('button','chat-copy-button','⧉ Копировать');
+    copy.type='button';copy.setAttribute('aria-label','Копировать текст сообщения');
+    copy.addEventListener('click',async()=>{
+      try{await navigator.clipboard.writeText(message.content);copy.textContent='✓ Скопировано';}
+      catch{notify('Не удалось скопировать текст',true)}
+    });
+    messageTools.append(copy);bubble.append(messageTools);
     if (message.role === 'assistant') {
       const actions = escapeNotNeeded('div', 'soul-chat-feedback');
       for (const [symbol,label,rating] of [['✓','Полезный ответ','positive'],['✎','Исправить ответ','negative']]) {
@@ -540,7 +560,8 @@ function renderChat() {
     });
     list.append(details);
   }
-  list.scrollTop = list.scrollHeight;
+  if(!chatScrollPinned || !list.dataset.rendered)list.scrollTop=list.scrollHeight;
+  list.dataset.rendered='true';updateChatJump();
 }
 function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
 
@@ -617,8 +638,10 @@ el('chat-expand').addEventListener('click',()=>{
  el('chat-expand').title=expanded?'Свернуть чат':'Развернуть чат';
  el('chat-input').focus();
 });
-function updateChatCounter(){el('chat-count').textContent=el('chat-input').value.length+' / 8000'}
+function updateChatCounter(){el('chat-count').textContent=el('chat-input').value.length+' / 8000';resizeChatInput()}
 el('chat-input').addEventListener('input',updateChatCounter);
+el('chat-thread').addEventListener('scroll',updateChatJump,{passive:true});
+el('chat-jump').addEventListener('click',()=>{el('chat-thread').scrollTo({top:el('chat-thread').scrollHeight,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});chatScrollPinned=false;el('chat-jump').hidden=true});
 updateChatCounter();
 el('chat-close').addEventListener('click', () => toggleChat(false));
 document.addEventListener('keydown', event => {
@@ -642,7 +665,7 @@ el('chat-form').addEventListener('submit', event => {
       viewState.messages = result.messages;
       chatSources = Array.isArray(result.sources) ? result.sources : [];
       el('chat-input').value = '';updateChatCounter();
-      render(); 
+      chatScrollPinned=false;render(); 
     } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false;el('chat-send-status').hidden=true;el('chat-thread').removeAttribute('aria-busy'); el('chat-input').focus(); }
   });
 });
