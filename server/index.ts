@@ -488,6 +488,32 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
   }
+  if(method==='GET'&&pathname==='/api/soul/planned-goals'){
+    json(res,200,soul.plannedGoalsReport());return;
+  }
+  if(method==='POST'&&pathname==='/api/soul/planned-goals'){
+    const input=await bodyJson(req);
+    try{json(res,201,{item:await soul.createPlannedGoal(input.title,input.sourceId,input.steps)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Некорректный план');}
+    return;
+  }
+  if(method==='PATCH'&&pathname.startsWith('/api/soul/planned-goals/')&&!pathname.includes('/steps/')){
+    const id=pathname.slice('/api/soul/planned-goals/'.length);
+    if(!validId(id))throw new HttpError(400,'Некорректный ID цели');
+    const input=await bodyJson(req);
+    if(input.status!=='active'&&input.status!=='cancelled')throw new HttpError(400,'Некорректный статус');
+    try{json(res,200,{item:await soul.decidePlannedGoal(id,input.status)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Не удалось обновить цель');}
+    return;
+  }
+  if(method==='POST'&&pathname.startsWith('/api/soul/planned-goals/')&&pathname.endsWith('/complete')&&pathname.includes('/steps/')){
+    const parts=pathname.slice('/api/soul/planned-goals/'.length,-'/complete'.length).split('/steps/');
+    if(parts.length!==2||!validId(parts[0])||!validId(parts[1]))throw new HttpError(400,'Некорректные ID');
+    const input=await bodyJson(req);
+    try{json(res,200,{item:await soul.completePlannedStep(parts[0],parts[1],input.evidenceId)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя завершить шаг');}
+    return;
+  }
   if (method === 'GET' && pathname === '/api/soul/commitment-watch') {
     json(res,200,soul.commitmentWatchReport());return;
   }
