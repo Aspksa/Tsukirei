@@ -487,6 +487,25 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
   }
+  if (method === 'GET' && pathname === '/api/soul/commitments') {
+    json(res,200,soul.commitmentReport());return;
+  }
+  if (method === 'POST' && pathname === '/api/soul/commitments') {
+    const input=await bodyJson(req);
+    try {json(res,201,{item:await soul.addCommitment(input.title,input.sourceId)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Некорректное обязательство');}
+    return;
+  }
+  if (method === 'PATCH' && pathname.startsWith('/api/soul/commitments/')) {
+    const id=pathname.slice('/api/soul/commitments/'.length);
+    if(!validId(id))throw new HttpError(400,'Некорректный идентификатор');
+    const input=await bodyJson(req);
+    if(!['accepted','completed','failed','cancelled'].includes(input.status))
+      throw new HttpError(400,'Некорректный статус обязательства');
+    try {json(res,200,{item:await soul.decideCommitment(id,input.status,input.evidenceId,input.note)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Невозможно обновить обязательство');}
+    return;
+  }
   if (method === 'GET' && pathname === '/api/soul/character-evolution') {
     json(res,200,soul.characterEvolutionReport());return;
   }
