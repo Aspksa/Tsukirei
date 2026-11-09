@@ -745,6 +745,23 @@ const server = createServer((req, res) => {
   });
 });
 server.on('error', (error) => { console.error('[Tsukirei] Сервер не запустился:', error.message); process.exitCode = 1; });
+let shuttingDown=false;
+function shutdown(signal:string){
+  if(shuttingDown)return;
+  shuttingDown=true;
+  console.log('[Tsukirei] Завершение работы:',signal);
+  // Stop scheduling before closing connections. Persistent files are never deleted.
+  background.close();
+  ragWorker?.close();
+  living.close();
+  soul.close();
+  server.close(error=>{
+    if(error){console.error('[Tsukirei] Ошибка остановки:',error);process.exitCode=1;}
+  });
+}
+process.once('SIGINT',()=>shutdown('SIGINT'));
+process.once('SIGTERM',()=>shutdown('SIGTERM'));
+
 server.listen(port, '127.0.0.1', () => {
   const address = server.address();
   const actualPort = address && typeof address !== 'string' ? address.port : port;
