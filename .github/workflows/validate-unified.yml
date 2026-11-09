@@ -1,0 +1,29 @@
+name: Tsukirei validation
+on:
+  push:
+    branches: [main, feat/unified-brain-workspace]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: Windows BAT static smoke test
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path Tsukirei.bat)) { throw 'Tsukirei.bat missing' }
+          $text = Get-Content Tsukirei.bat -Raw
+          if (-not $text.Trim()) { throw 'Tsukirei.bat empty' }

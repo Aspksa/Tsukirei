@@ -42,14 +42,9 @@
       <div class="side-separator"></div>
       <nav class="nav" aria-label="Разделы">
         <button class="nav-button selected" data-page="home" data-label="Главная" aria-label="Главная" aria-current="page"><svg><use href="#i-home"/></svg></button>
-        <button class="nav-button" data-page="memory" data-label="Память" aria-label="Память"><svg><use href="#i-memory"/></svg></button>
-        <button class="nav-button" data-page="search" data-label="RAG и документы" aria-label="RAG и документы"><svg><use href="#i-search"/></svg></button>
+        <button class="nav-button" data-page="brain" data-label="Мозг" aria-label="Мозг"><svg><use href="#i-memory"/></svg></button>
         <button class="nav-button" data-page="tasks" data-label="Дела" aria-label="Дела"><svg><use href="#i-tasks"/></svg></button>
         <button class="nav-button" data-page="agents" data-label="Агенты" aria-label="Агенты"><svg><use href="#i-agents"/></svg></button>
-        <button class="nav-button" data-page="soul" data-label="Личность" aria-label="Личность"><svg><use href="#i-soul"/></svg></button>
-        <button class="nav-button" data-page="living" data-label="Развитие" aria-label="Развитие"><svg><use href="#i-living"/></svg></button>
-        <button class="nav-button" data-page="cognition" data-label="Мышление" aria-label="Мышление"><svg><use href="#i-cognition"/></svg></button>
-        <button class="nav-button" data-page="supermind" data-label="Душа и сверхразум" aria-label="Душа и сверхразум"><svg><use href="#i-supermind"/></svg></button>
       </nav>
       <div class="nav-bottom">
         <button class="nav-button" data-page="settings" data-label="Настройки" aria-label="Настройки"><svg><use href="#i-settings"/></svg></button>
@@ -67,6 +62,20 @@
       </header>
 
       <main class="main">
+        <section class="page" id="page-brain" hidden aria-labelledby="brain-title">
+          <div class="page-heading"><div><h1 id="brain-title">Мозг <em>Цукирэй.</em></h1><p>Память, знания, личность и развитие в одном пространстве.</p></div></div>
+          <div class="glass-panel" role="navigation" aria-label="Подразделы мозга">
+            <div class="list-heading"><h2>Области мозга</h2><span>Данные и история сохраняются</span></div>
+            <div class="settings-actions brain-links">
+              <button class="ghost-button" type="button" data-page="memory">Память</button>
+              <button class="ghost-button" type="button" data-page="search">Поиск и документы</button>
+              <button class="ghost-button" type="button" data-page="soul">Личность</button>
+              <button class="ghost-button" type="button" data-page="supermind">История и сверхразум</button>
+              <button class="ghost-button" type="button" data-page="living">Развитие</button>
+              <button class="ghost-button" type="button" data-page="cognition">Мышление</button>
+            </div>
+          </div>
+        </section>
         <section class="page is-active" id="page-home" aria-labelledby="home-title">
           <div class="page-heading">
             <div><div class="eyebrow"><span class="small-line"></span> PERSONAL INTELLIGENCE / 001</div><h1 id="home-title">Добро пожаловать в <em>Цукирэй.</em></h1><p>Ваше пространство знаний, дел и интеллекта. Всё важное — рядом.</p></div>
