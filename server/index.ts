@@ -276,6 +276,26 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     json(res, 200, { ...state, messages: state.messages.slice(-250), settings: settingsPublic(), agents: [],
       database: { engine: database ? 'PostgreSQL + pgvector' : 'JSON (legacy)', connected: Boolean(database) } }); return;
   }
+  if (method === 'GET' && pathname === '/api/brain/overview') {
+    const [state] = await Promise.all([readState()]);
+    const cognitionStatus=cognition.status();
+    const livingStatus=living.status();
+    const mindStatus=supermind.status();
+    const soulStatus=soul.overview();
+    json(res,200,{
+      updatedAt:new Date().toISOString(),
+      memory:{notes:state.notes.length,tasks:state.tasks.length,messages:state.messages.length,
+        facts:cognitionStatus.facts,worldNodes:cognitionStatus.worldNodes,worldEdges:cognitionStatus.worldEdges},
+      learning:{lastScanAt:cognitionStatus.lastScanAt,gaps:cognitionStatus.gaps,
+        duplicateGroups:cognitionStatus.duplicateGroups,running:cognitionStatus.busy,
+        livingRunning:livingStatus.running,cloudCallsToday:livingStatus.budget.calls,
+        cloudDailyLimit:livingStatus.budget.limit},
+      identity:{scans:mindStatus.scans,lifeEvents:mindStatus.lifeEvents,
+        inquiries:mindStatus.inquiries,lessons:soulStatus.lessons.length},
+      background:background.status(),
+      privacy:{local:true,cloudRequestsForOverview:0}
+    });return;
+  }
   if (method === 'GET' && pathname === '/api/supermind') {
     json(res,200,await supermind.workspace());return;
   }
