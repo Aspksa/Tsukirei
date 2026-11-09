@@ -23,6 +23,7 @@ function stem(word: string) {
       'ему','ыми','ими','ая','ую','ое','ые','ий','ый','ой','ых','их','ам','ям','ах','ях','ом','ем','ов','ев','ей','ия','ие','ию']) {
       if (word.endsWith(suffix) && word.length - suffix.length >= 3) return word.slice(0,-suffix.length);
     }
+    if (word.length >= 6 && /[аяеёиоуыь]$/u.test(word)) return word.slice(0,-1);
     return word;
   }
   for (const suffix of ['ations','ation','ments','ment','ings','ing','ed','es','s']) {
@@ -132,20 +133,16 @@ export function publicSources(hits: RagHit[]): PublicSource[] {
 }
 export function groundedContext(hits: RagHit[], maxChars = 4600) {
   if (!hits.length) return '';
-  const output: string[]=[];
-  let left = Math.min(12000,Math.max(500,maxChars));
-  for (let i=0;i<hits.length;i++) {
-    const source=hits[i];
-    const head='['+(i+1)+'] '+JSON.stringify({
-      type:source.kind,record:source.id,title:source.title.slice(0,120),
-      ...(source.part===undefined?{}:{part:source.part})
-    })+'\n';
-    if (head.length + 100 > left) break;
-    const budget=Math.min(950,left-head.length-2);
-    const content=source.content.slice(0,budget).replace(/[\u0000-\u001f]/g,' ').trim();
-    output.push(head+content);
-    left-=head.length+content.length+2;
-    if(left<250)break;
-  }
-  return output.join('\n\n');
+  const budget = Math.min(12000,Math.max(500,maxChars));
+  const headers=hits.map((source,i)=>'['+(i+1)+'] '+JSON.stringify({
+    type:source.kind,record:source.id,title:source.title.slice(0,120),
+    ...(source.part===undefined?{}:{part:source.part})
+  })+'\n');
+  const fixed=headers.reduce((sum,h)=>sum+h.length+2,0);
+  const perSource=Math.max(0,Math.min(1000,Math.floor((budget-fixed)/hits.length)));
+  if (perSource < 25) return ''; // caller must not claim unsupported sources
+  return hits.map((source,i)=>{
+    const content=source.content.slice(0,perSource).replace(/[\u0000-\u001f]/g,' ').trim();
+    return headers[i]+content;
+  }).join('\n\n');
 }
