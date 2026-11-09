@@ -92,6 +92,13 @@ jobs:
             $lifeNext = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/living' -TimeoutSec 10
             if ($lifeNext.metrics.localRuns -lt 1 -or $lifeNext.budget.calls -ne 0) { throw 'Living Core run was not persisted or made paid calls' }
             if (-not (Test-Path -LiteralPath (Join-Path $dir 'data/living-state.json'))) { throw 'Living Core local file missing' }
+            $cognition = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/cognition' -TimeoutSec 10
+            if ($cognition.metrics.scans -lt 1 -or $cognition.worldNodes -lt 0) { throw 'Cognitive Evolution index failed' }
+            $goal = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/cognition/goals' -Method Post -ContentType 'application/json' -Body '{"title":"Windows portability","objective":"Confirm goal persistence on Windows with PostgreSQL"}' -TimeoutSec 10
+            if (-not $goal.goal.id) { throw 'Cognitive long-term goal was not saved' }
+            $goalState = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/cognition/goals' -TimeoutSec 10
+            if ($goalState.items.Count -ne 1) { throw 'Cognitive goals not persisted' }
+            if (-not (Test-Path -LiteralPath (Join-Path $dir 'data/cognitive-state.json'))) { throw 'Cognitive local state missing' }
             $config = Get-Content -LiteralPath (Join-Path $dir 'data/portable-postgres.json') -Raw | ConvertFrom-Json
             if (([IO.Path]::GetPathRoot($config.store)) -ne ([IO.Path]::GetPathRoot($dir))) { throw 'Database not stored on the same drive' }
             if ($config.store -notmatch '^[\x20-\x7E]+$') { throw 'Database physical path must be ASCII' }
