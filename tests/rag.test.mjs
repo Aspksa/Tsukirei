@@ -56,3 +56,19 @@ test('RAG detects matching words later in a long chunk',()=>{
   const hits=rankSources('редукторный',[{kind:'document',id:'late',title:'Инструкция',content:text}],5);
   assert.equal(hits.length,1);
 });
+
+test('context numbering remains complete inside a 4200-character budget',()=>{
+  const hits=Array.from({length:5},(_,i)=>({
+    kind:'note',id:'record-'+i,title:'Факт №'+i,content:'Полный факт '.repeat(200),
+    evidenceId:'note:record-'+i+':0',score:12
+  }));
+  const text=groundedContext(hits,4200);
+  assert.ok(text.length<=4200);
+  for(let i=1;i<=5;i++)assert.ok(text.includes('['+i+']'));
+});
+test('Russian inflections match stored memories',()=>{
+  const hits=rankSources('о редукторных муфтах',[
+    {kind:'document',id:'m',title:'Ремонт',content:'редукторная муфта нуждается в ремонте.'}
+  ]);
+  assert.equal(hits[0]?.id,'m');
+});
