@@ -431,6 +431,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const q=new URL(req.url??'/','http://127.0.0.1').searchParams.get('q')??'';
     json(res,200,cognition.world(q));return;
   }
+  if (method === 'GET' && pathname === '/api/cognition/hygiene') {
+    json(res,200,cognition.hygiene());return;
+  }
   if (method === 'GET' && pathname === '/api/cognition/dreams') {
     json(res,200,{items:cognition.dreams()});return;
   }
