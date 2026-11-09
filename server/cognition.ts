@@ -268,7 +268,7 @@ export class CognitiveCore{
   }
   world(query='',limit=100){
     const q=shorten(query,70).toLowerCase();
-    const max=Math.min(350,Math.max(1,Math.trunc(Number.isFinite(limit)?limit:100)));
+    const max=Math.min(3000,Math.max(1,Math.trunc(Number.isFinite(limit)?limit:100)));
     const matched=this.data.nodes.filter(n=>!q||n.id.toLowerCase().includes(q)||n.label.toLowerCase().includes(q));
     const matchedIds=new Set(matched.map(n=>n.id));
     const relevantEdges=this.data.edges.filter(e=>!q||
@@ -278,7 +278,7 @@ export class CognitiveCore{
     const candidates=this.data.nodes.filter(n=>!q||matchedIds.has(n.id)||linked.has(n.id));
     const nodes=candidates.slice(0,max);
     const visible=new Set(nodes.map(n=>n.id));
-    const edges=relevantEdges.filter(e=>visible.has(e.from)&&visible.has(e.to)).slice(0,350);
+    const edges=relevantEdges.filter(e=>visible.has(e.from)&&visible.has(e.to)).slice(0,3000);
     return {edges,nodes,totalNodes:candidates.length,hasMore:candidates.length>nodes.length,
       note:'Только отношения, явно извлечённые из источников и связи утверждённых пользователем целей.'};
   }
@@ -349,15 +349,43 @@ export class CognitiveCore{
         .map(t=>({at:t.at,stage:t.stage,detail:t.detail,itemCount:t.itemCount}))};
   }
 
+  learningAudit(now:Date=new Date()){
+    const report=this.hygiene(now);
+    const review=this.reviewQueue(now);
+    const confirmed=this.data.facts.filter(f=>f.status==='confirmed');
+    const proposed=this.data.facts.filter(f=>f.status==='proposed');
+    const recent=this.data.traces.filter(t=>{
+      const at=Date.parse(t.at);
+      return Number.isFinite(at)&&at<=now.getTime()&&at>=now.getTime()-30*86400000;
+    });
+    const failures=recent.filter(t=>t.stage==='error');
+    const scans=recent.filter(t=>t.stage==='complete');
+    const findings={
+      conflicts:report.conflicts.length,stale:report.stale.length,
+      missingSources:report.missing.length,duplicateGroups:report.duplicateGroups.length,
+      awaitingReview:review.items.length,proposedFacts:proposed.length
+    };
+    const suggestions=[
+      ...(findings.conflicts?['Проверить противоречащие подтверждённые факты']:[]),
+      ...(findings.missingSources?['Восстановить или проверить отсутствующие источники']:[]),
+      ...(findings.stale?['Перепроверить устаревшие факты']:[]),
+      ...(failures.length?['Проверить ошибки фоновой обработки']:[])
+    ];
+    return {generatedAt:now.toISOString(),windowDays:30,confirmedFacts:confirmed.length,
+      scansCompleted:scans.length,scanErrors:failures.length,findings,
+      suggestions,automaticFactApproval:false,modelTrainingPerformed:false,
+      note:'Локальный аудит качества знаний и ошибок; не обучение весов модели.'};
+  }
+
   async scan(force=false){
     if(this.busy)return {skipped:'Идёт другая локальная проверка'};
     this.busy=true;const t=Date.now();
     try{return await this.modify(async()=>{
       const state=await this.deps.read();
       const indexed=await (this.deps.indexed?.().catch(()=>[])??Promise.resolve([]));
-      const notes=state.notes.slice(0,500);
+      const notes=state.notes.slice(0,2000);
       const recent=state.messages.slice(-300);
-      const docs=indexed.slice(0,100);
+      const docs=indexed.slice(0,500);
       const fingerprint=digest(JSON.stringify({
         notes:notes.map(n=>[n.id,digest(n.title+n.body),n.createdAt]),
         tasks:state.tasks.slice(0,200).map(v=>[v.id,v.done,v.title]),
@@ -414,9 +442,9 @@ export class CognitiveCore{
           const edge:WorldEdge={from,to,relation:relation.relation,evidenceId:source.id,excerpt:relation.evidence};
           if(!edges.some(e=>e.from===edge.from&&e.to===edge.to&&e.relation===edge.relation&&e.evidenceId===edge.evidenceId))
             edges.push(edge);
-          if(edges.length>=300)break;
+          if(edges.length>=3000)break;
         }
-        if(edges.length>=300)break;
+        if(edges.length>=3000)break;
       }
       for(const goal of this.data.goals.slice(0,80)){
         const from='goal:'+goal.id;
@@ -431,8 +459,8 @@ export class CognitiveCore{
           }
         }
       }
-      this.data.nodes=[...nodes.values()].slice(0,350);
-      this.data.edges=edges.slice(0,350);
+      this.data.nodes=[...nodes.values()].slice(0,3000);
+      this.data.edges=edges.slice(0,3000);
       this.trace('world','Связи построены только из явных утверждений и целей',this.data.edges.length);
       const duplicates=new Map<string,string[]>();
       for(const n of notes){
