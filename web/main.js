@@ -194,6 +194,66 @@ document.querySelectorAll('[data-brain-period]').forEach(button=>{
     void refreshBrainGrowth();
   });
 });
+const brainViewport={x:0,y:0,width:700,height:340};
+function applyBrainViewport(){
+  el('brain-map-svg').setAttribute('viewBox',
+    [brainViewport.x,brainViewport.y,brainViewport.width,brainViewport.height].join(' '));
+}
+function resetBrainViewport(){
+  Object.assign(brainViewport,{x:0,y:0,width:700,height:340});
+  applyBrainViewport();
+}
+function zoomBrain(factor,clientX=null,clientY=null){
+  const svg=el('brain-map-svg');
+  const bounds=svg.getBoundingClientRect();
+  const ratio=bounds.width&&bounds.height?
+    Math.min(bounds.width/brainViewport.width,bounds.height/brainViewport.height):1;
+  const drawnWidth=brainViewport.width*ratio,drawnHeight=brainViewport.height*ratio;
+  const localX=clientX===null||!ratio?brainViewport.width/2:
+    (clientX-bounds.left-(bounds.width-drawnWidth)/2)/ratio;
+  const localY=clientY===null||!ratio?brainViewport.height/2:
+    (clientY-bounds.top-(bounds.height-drawnHeight)/2)/ratio;
+  const px=brainViewport.x+localX,py=brainViewport.y+localY;
+  const width=Math.max(140,Math.min(1400,brainViewport.width*factor));
+  const height=width*340/700;
+  brainViewport.x=px-(px-brainViewport.x)*width/brainViewport.width;
+  brainViewport.y=py-(py-brainViewport.y)*height/brainViewport.height;
+  brainViewport.width=width;brainViewport.height=height;
+  applyBrainViewport();
+}
+el('brain-zoom-in').addEventListener('click',()=>zoomBrain(.8));
+el('brain-zoom-out').addEventListener('click',()=>zoomBrain(1.25));
+el('brain-zoom-reset').addEventListener('click',resetBrainViewport);
+{
+  const svg=el('brain-map-svg');
+  svg.addEventListener('wheel',event=>{
+    if(!svg.closest('#page-brain')?.hidden){
+      event.preventDefault();
+      zoomBrain(event.deltaY<0?.88:1.12,event.clientX,event.clientY);
+    }
+  },{passive:false});
+  let dragging=null;
+  svg.addEventListener('pointerdown',event=>{
+    if(event.button!==0||event.target.closest('g[role="button"]'))return;
+    dragging={id:event.pointerId,x:event.clientX,y:event.clientY};
+    svg.setPointerCapture(event.pointerId);
+  });
+  svg.addEventListener('pointermove',event=>{
+    if(!dragging||dragging.id!==event.pointerId)return;
+    const bounds=svg.getBoundingClientRect();
+    if(!bounds.width||!bounds.height)return;
+    const ratio=Math.min(bounds.width/brainViewport.width,bounds.height/brainViewport.height);
+    brainViewport.x-=(event.clientX-dragging.x)/ratio;
+    brainViewport.y-=(event.clientY-dragging.y)/ratio;
+    dragging.x=event.clientX;dragging.y=event.clientY;
+    applyBrainViewport();
+  });
+  const stopDrag=event=>{if(dragging?.id===event.pointerId)dragging=null;};
+  svg.addEventListener('pointerup',stopDrag);
+  svg.addEventListener('pointercancel',stopDrag);
+  svg.addEventListener('lostpointercapture',()=>{dragging=null;});
+}
+
 let selectedBrainTopic=null;
 async function refreshBrainKnowledge(){
   const svg=el('brain-map-svg');
@@ -259,7 +319,7 @@ async function refreshBrainKnowledge(){
       }
     }
 
-    svg.setAttribute('viewBox','0 0 700 340');
+    resetBrainViewport();
     svg.replaceChildren();
     const ns='http://www.w3.org/2000/svg';
     const make=(tag,attrs,parent=svg)=>{
