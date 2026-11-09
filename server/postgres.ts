@@ -288,7 +288,9 @@ export async function connectPostgres(dataDir: string) {
           WHERE tsukirei_rag_index.checksum IS DISTINCT FROM EXCLUDED.checksum
           RETURNING source_key`;
         if(!result.length){
-          await sql`UPDATE tsukirei_rag_index SET scan_token=${scanToken}
+          await sql`UPDATE tsukirei_rag_index
+            SET scan_token=${scanToken},
+              source_created_at=COALESCE(source_created_at,${sourceDate})
             WHERE source_key=${item.key}`;
           return {changed:false};
         }
