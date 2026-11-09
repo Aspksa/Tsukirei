@@ -33,18 +33,20 @@ export function proposalChecks(kind:Kind,title:string,reason:string,evidence:str
 }
 export class LivingCore{
  private file:string;private deps:Dependencies;private data:Store;
- private timer:ReturnType<typeof setInterval>;private lock:Promise<unknown>=Promise.resolve();
+ private timer:ReturnType<typeof setInterval>|null=null;private lock:Promise<unknown>=Promise.resolve();
  private running=false;private closed=false;private lastActivity=Date.now();private lastTick=0;
  private cloudAbort:AbortController|null=null;
- constructor(dir:string,deps:Dependencies){
+ constructor(dir:string,deps:Dependencies,automaticTick=true){
   mkdirSync(dir,{recursive:true});this.file=join(dir,'living-state.json');this.deps=deps;
   this.data=existsSync(this.file)?JSON.parse(readFileSync(this.file,'utf8')):initial();
   if(this.data.version!==1||!Array.isArray(this.data.ideas)||!Array.isArray(this.data.journal))throw Error('Повреждён Living Core');
   this.data.settings={...defaults,...this.data.settings};
-  this.timer=setInterval(()=>{void this.tick().catch(e=>console.warn('[Living]',e));},60000);
-  this.timer.unref?.();
+  if(automaticTick){
+   this.timer=setInterval(()=>{void this.tick().catch(e=>console.warn('[Living]',e));},60000);
+   this.timer.unref?.();
+  }
  }
- close(){this.closed=true;clearInterval(this.timer);}
+ close(){this.closed=true;if(this.timer)clearInterval(this.timer);this.timer=null;this.cloudAbort?.abort();}
  touch(){this.lastActivity=Date.now();this.cloudAbort?.abort();}
  private day(){return(this.deps.now?.()??new Date()).toISOString().slice(0,10);}
  private budget(){const d=this.day();if(this.data.budget.date!==d)this.data.budget={date:d,calls:0};return this.data.budget;}
