@@ -28,7 +28,7 @@ const database = await connectPostgres(dataDir);
 const ragProvider = new RagProvider(dataDir);
 const soul = new SoulEngine(dataDir);
 const ragCache = new RagCache<{hits:Awaited<ReturnType<typeof retrieveRag>>['hits'];mode:string}>(128,90_000);
-const ragWorker = database ? new RagWorker(database,ragProvider,()=>ragCache.clear()) : null;
+const ragWorker = database ? new RagWorker(database,ragProvider,()=>ragCache.clear(),false) : null;
 function queueRagIndex(){
   ragCache.clear();
   ragWorker?.schedule();
