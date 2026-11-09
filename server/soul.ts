@@ -12,7 +12,7 @@ type Tone = 'нежный' | 'спокойный' | 'деловой';
 type PreferenceStatus = 'confirmed' | 'suggested';
 type Preference = { id:string; text:string; status:PreferenceStatus; source:string; createdAt:string };
 type Lesson = { id:string; text:string; source:string; createdAt:string; confirmed:boolean };
-type Journal = { id:string; at:string; type:'preference'|'feedback'|'reflection'|'initiative'|'setting'|'task'; text:string; source?:string };
+type Journal = { id:string; at:string; type:'preference'|'feedback'|'reflection'|'initiative'|'setting'|'task'|'growth'; text:string; source?:string };
 type Initiative = { id:string; topic:string; title:string; reason:string; sourceIds:string[]; at:string; status:'new'|'accepted'|'dismissed' };
 type SoulSettings = {
   address:string; tone:Tone; personalContext:boolean;
@@ -31,6 +31,7 @@ type SoulData = {
   seenTasks:string[];
   recurring:Array<{ topic:string; messageId:string; at:string }>;
   updatedAt:string;
+  growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
 };
 
 const tones:Tone[]=['нежный','спокойный','деловой'];
@@ -58,7 +59,8 @@ function empty():SoulData {
       personalContext:true,reflectionsEnabled:true,initiativeEnabled:true},
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
-    seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString()
+    seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
+    growth:{lastReviewedAt:null,reviews:0,history:[]}
   };
 }
 function validate(value:unknown):SoulData {
@@ -70,6 +72,7 @@ function validate(value:unknown):SoulData {
     throw new Error('Несовместимый формат данных личности');
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
+  if(!state.growth||!Array.isArray(state.growth.history))state.growth={lastReviewedAt:null,reviews:0,history:[]};
   if(typeof state.metrics.completedTasks!=='number')state.metrics.completedTasks=0;
   if(!tones.includes(state.settings.tone)||typeof state.settings.address!=='string')
     throw new Error('Некорректные настройки личности');
@@ -155,6 +158,46 @@ export class SoulEngine {
     const entry:Journal={id:randomUUID(),at:new Date().toISOString(),type,text,...(source?{source}:{})};
     this.data.journal=unique(this.data.journal,entry,MAX_JOURNAL);
   }
+  growthReport(){
+    const growth=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
+    return {lastReviewedAt:growth.lastReviewedAt,reviews:growth.reviews,
+      history:growth.history.slice(0,40),pendingInitiatives:this.data.initiatives.filter(i=>i.status==='new').length,
+      policy:'Локальная проверка наблюдаемых сигналов. Без самостоятельного обучения весов модели и изменения базовых ценностей.'};
+  }
+  async reviewGrowth(force=false){
+    return this.modify(()=>{
+      if(!this.data.settings.reflectionsEnabled)return {skipped:'Рефлексия отключена'};
+      const growth=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
+      const now=Date.now(),last=Date.parse(growth.lastReviewedAt??'');
+      if(!force&&Number.isFinite(last)&&now-last<24*60*60*1000)
+        return {skipped:'Проверка уже проводилась за последние 24 часа'};
+      const metrics=this.data.metrics;
+      const lessons=this.data.lessons.filter(x=>x.confirmed);
+      const preferences=this.data.preferences.filter(x=>x.status==='confirmed');
+      const suggestions=[
+        ...(metrics.negativeFeedback>metrics.positiveFeedback?
+          ['Уделить внимание исправлениям по отрицательной обратной связи']:[]),
+        ...(this.data.initiatives.some(i=>i.status==='new')?
+          ['Рассмотреть ожидающие решения инициативы']:[]),
+        ...(metrics.chatsObserved>0&&!lessons.length?
+          ['Собирать конкретную обратную связь для проверяемого улучшения']:[])
+      ];
+      const summary=suggestions.length?suggestions.join('; '):
+        'Сигналы стабильны; оснований менять характер и подтверждённые предпочтения нет';
+      const sourceIds=this.data.journal.filter(j=>j.type==='feedback'||j.type==='preference')
+        .slice(0,8).map(j=>j.source).filter((x):x is string=>Boolean(x));
+      const event={at:new Date(now).toISOString(),summary,signals:{
+        chats:metrics.chatsObserved,positive:metrics.positiveFeedback,
+        negative:metrics.negativeFeedback,lessons:lessons.length,preferences:preferences.length
+      },sourceIds:[...new Set(sourceIds)]};
+      growth.history=[event,...growth.history].slice(0,90);
+      growth.reviews++;
+      growth.lastReviewedAt=event.at;
+      this.data.growth=growth;
+      this.journal('growth','Проведена локальная самопроверка: '+summary.slice(0,160));
+      return {reviewed:true,event};
+    });
+  }
   personalityProfile(){
     const d=this.data;
     const confirmed=d.preferences.filter(p=>p.status==='confirmed'&&!BEHAVIOR_INJECTION.test(p.text));
@@ -181,7 +224,7 @@ export class SoulEngine {
       preferences:confirmed.slice(0,12).map(p=>({text:p.text,source:p.source})),
       reflections:lessons.slice(0,8).map(l=>({text:l.text,source:l.source})),
       biography:d.journal.slice(0,40).map(j=>({at:j.at,type:j.type,description:j.text,source:j.source??null})),
-      signals,updatedAt:d.updatedAt,
+      signals,updatedAt:d.updatedAt,growth:{reviews:d.growth?.reviews??0,lastReviewedAt:d.growth?.lastReviewedAt??null},
       autonomy:'Не выполняет действия и не изменяет правила без соответствующего разрешения',
       consciousnessClaim:false
     };
