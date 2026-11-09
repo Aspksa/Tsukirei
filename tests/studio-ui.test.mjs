@@ -18,3 +18,11 @@ test('goal form is labelled and confirmation is explicit',()=>{
  assert.ok(html.includes('prefers-reduced-motion'));
  assert.ok(html.includes('role="alert"'));
 });
+
+test('goal detail and evidence confirmation are available',()=>{
+ for(const id of ['goal-details','step-dialog','step-form','step-evidence','step-confirm','add-step','extra-steps'])
+   assert.ok(html.includes('id="'+id+'"'),id);
+ assert.ok(html.includes("evidenceId:'manual:'"));
+ assert.ok(html.includes("data-open-step"));
+ assert.ok(html.includes("count>=12"));
+});
