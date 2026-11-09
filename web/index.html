@@ -11,6 +11,7 @@
   <script src="/main.js" defer></script>
   <script src="/soul.js" defer></script>
   <script src="/living.js" defer></script>
+  <script src="/cognition.js" defer></script>
 </head>
 <body>
   <svg class="icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -19,6 +20,7 @@
     <symbol id="i-memory" viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-7.8 1.3A5 5 0 0 0 3 13a4.5 4.5 0 0 0 5 7 4.5 4.5 0 0 0 4-3 4.5 4.5 0 0 0 4 3 4.5 4.5 0 0 0 5-7 5 5 0 0 0-1.2-8.7A4 4 0 0 0 12 3z"/><path d="M12 3v14m-6-9 3 2m9-2-3 2M6 15l3-1m9 1-3-1"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8m2 2h3M8 16h9"/></symbol>
     <symbol id="i-agents" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 3v4M9 3h6M8 12h.01M16 12h.01M9 16h6M2 11v4m20-4v4"/></symbol>
+    <symbol id="i-cognition" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v6m0 8v6M2 12h6m8 0h6M5 5l4 4m6 6 4 4M19 5l-4 4M9 15l-4 4"/></symbol>
     <symbol id="i-living" viewBox="0 0 24 24"><path d="M12 22v-10m0 5c-5 0-8-3-8-8 5 0 8 3 8 8Zm0-4c0-5 3-8 8-8 0 5-3 8-8 8Z"/></symbol>
     <symbol id="i-soul" viewBox="0 0 24 24"><path d="M12 2 14 8l6 4-6 4-2 6-2-6-6-4 6-4z"/><path d="m19 2 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/></symbol>
     <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 3 14 5l3-.3.8 3 2.5 1.5-1.5 2.8 1.5 2.8-2.5 1.5-.8 3-3-.3-2 2-2-2-3 .3-.8-3-2.5-1.5L5.2 12 3.7 9.2l2.5-1.5.8-3 3 .3z"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -44,6 +46,7 @@
         <button class="nav-button" data-page="agents" data-label="Агенты" aria-label="Агенты"><svg><use href="#i-agents"/></svg></button>
         <button class="nav-button" data-page="soul" data-label="Личность" aria-label="Личность"><svg><use href="#i-soul"/></svg></button>
         <button class="nav-button" data-page="living" data-label="Развитие" aria-label="Развитие"><svg><use href="#i-living"/></svg></button>
+        <button class="nav-button" data-page="cognition" data-label="Мышление" aria-label="Мышление"><svg><use href="#i-cognition"/></svg></button>
       </nav>
       <div class="nav-bottom">
         <button class="nav-button" data-page="settings" data-label="Настройки" aria-label="Настройки"><svg><use href="#i-settings"/></svg></button>
@@ -57,7 +60,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v1.0</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v1.1</span></div>
       </header>
 
       <main class="main">
@@ -360,6 +363,94 @@
                   <span>12 · Supervisor — лимиты, проверка и откат</span>
                 </div>
                 <p class="living-note">Эти функции объединены в одном лёгком процессе Node.js, а не в двенадцати постоянно работающих моделях.</p>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+
+        <section class="page cognition-page" id="page-cognition" hidden aria-labelledby="cognition-title">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow"><span class="small-line"></span> COGNITIVE EVOLUTION / v1.1</div>
+              <h1 id="cognition-title">Разум <em>Цукирэй.</em></h1>
+              <p>Проверяемые знания, цели, последовательность событий и реальные этапы работы без имитации человеческих мыслей.</p>
+            </div>
+            <span class="date-chip" id="cog-scan-state">Локальное ядро</span>
+          </div>
+          <div class="cog-metrics">
+            <div class="glass-panel cog-metric"><small>МОДЕЛЬ МИРА</small><strong id="cog-link-count">0</strong><span>связей с источниками</span></div>
+            <div class="glass-panel cog-metric"><small>ДОЛГОСРОЧНЫЕ ЦЕЛИ</small><strong id="cog-goal-count">0</strong><span>планов владельца</span></div>
+            <div class="glass-panel cog-metric"><small>ИСТОРИЯ ЗНАНИЙ</small><strong id="cog-fact-count">0</strong><span>версий фактов</span></div>
+            <div class="glass-panel cog-metric"><small>ПРОБЕЛЫ</small><strong id="cog-gap-count">0</strong><span>вопросов для изучения</span></div>
+          </div>
+          <div class="cog-layout">
+            <div class="cog-main">
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>13 · Метапознание</h2><span>проверка достаточности источников</span></div>
+                <p class="cog-hint">Цукирэй оценивает, насколько найденные локальные записи покрывают вопрос. Это не процент истинности или IQ.</p>
+                <form class="cog-search" id="cog-assess-form">
+                  <label for="cog-assess-query" class="sr-only">Что Цукирэй должна проверить?</label>
+                  <input id="cog-assess-query" type="search" maxlength="500" required placeholder="Что мы решили по памяти проекта?">
+                  <button type="submit" class="gold-button">Проверить знания</button>
+                </form>
+                <div id="cog-assessment" class="cog-output" aria-live="polite"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>17 · Долгосрочные цели</h2><span id="cog-goal-meta">С задачами</span></div>
+                <form class="cog-goal-form" id="cog-goal-form">
+                  <label for="cog-goal-title">Название цели</label>
+                  <input id="cog-goal-title" maxlength="120" required placeholder="Повысить точность поиска">
+                  <label for="cog-goal-objective">Проверяемый результат</label>
+                  <textarea id="cog-goal-objective" maxlength="400" required rows="2" placeholder="Например: пройти тесты на 50 вопросах без регрессий"></textarea>
+                  <div class="cog-goal-row">
+                    <label for="cog-goal-priority">Приоритет
+                      <select id="cog-goal-priority"><option value="normal">Обычный</option><option value="high">Высокий</option><option value="low">Низкий</option></select>
+                    </label>
+                    <label for="cog-goal-deadline">Срок (необязательно)
+                      <input id="cog-goal-deadline" type="date">
+                    </label>
+                  </div>
+                  <span class="cog-field-label">Привязать существующие дела</span>
+                  <div id="cog-task-options" class="cog-task-options"><p class="cog-hint">Задачи загружаются локально.</p></div>
+                  <button class="gold-button" type="submit">Создать цель</button>
+                </form>
+                <div id="cog-goals" class="cog-list"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>16 · Модель мира</h2><span>связи с доказательствами</span></div>
+                <form class="cog-search" id="cog-world-form">
+                  <label for="cog-world-query" class="sr-only">Название сущности</label>
+                  <input id="cog-world-query" type="search" maxlength="70" placeholder="Найти проект, сущность или отношение">
+                  <button type="submit" class="ghost-button">Найти</button>
+                </form>
+                <div id="cog-world" class="cog-list"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>25 · Эволюция знаний</h2><span>без удаления истории</span></div>
+                <p class="cog-hint">Записи вида «Поле: значение» из заметок становятся кандидатами. Прежнее подтверждённое значение сохраняется как историческая версия после твоего подтверждения нового.</p>
+                <div id="cog-facts" class="cog-list"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>19 · Активное изучение</h2><span>чего пока не знает</span></div>
+                <p class="cog-hint">Недостаточно подтверждённые вопросы накапливаются для последующего изучения. Решение всегда требует проверенного источника.</p>
+                <div id="cog-questions" class="cog-list"></div>
+              </div>
+            </div>
+            <aside class="cog-side">
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>22 · Сон памяти</h2><button id="cog-scan" class="ghost-button" type="button">Обновить индекс</button></div>
+                <p class="cog-hint" id="cog-dream-overview">Во время фоновой проверки упорядочивает знания без Cloud.ru и без изменения исходных записей.</p>
+                <div id="cog-dreams" class="cog-list"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>26 · Временная память</h2><span>события по датам</span></div>
+                <div id="cog-timeline" class="cog-list cog-scroll"></div>
+              </div>
+              <div class="glass-panel cog-section">
+                <div class="list-heading"><h2>30 · Активность обработки</h2><span id="cog-trace-meta">наблюдаемые этапы</span></div>
+                <p class="cog-hint">Видны действительные этапы сканирования, время и количество обработанных источников. Внутренние скрытые рассуждения модели здесь не отображаются.</p>
+                <div id="cog-traces" class="cog-list cog-scroll"></div>
               </div>
             </aside>
           </div>
