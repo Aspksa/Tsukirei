@@ -943,14 +943,14 @@ function monitorSafeReport(items){
  const lines=['Tsukirei · локальная диагностика','Только технические метаданные; без текста диалогов и содержимого памяти.',''];
  for(const item of items){
   const backend=String(item.target||'').includes('PostgreSQL')?'PostgreSQL':String(item.target||'').includes('JSON')?'JSON':'';
-  const stage=String(item.stage||'Этап').replace(/[\\r\\n]/g,' ').slice(0,90);
+  const stage=String(item.stage||'Этап').replace(/[\r\n]/g,' ').slice(0,90);
   const time=Number(item.durationMs);
   const ms=Number.isFinite(time)?Math.max(0,Math.round(time)):0;
   const status=item.status==='ok'?'OK':'ERROR';
   const at=Number.isFinite(Date.parse(item.at))?new Date(item.at).toISOString():'—';
   lines.push(at+' | '+stage+' | '+status+' | '+ms+' мс'+(backend?' | '+backend:'')+(item.parentStage?' | вложенный этап':''));
  }
- return lines.join('\\n');
+ return lines.join('\n');
 }
 el('monitor-report-copy').addEventListener('click',async()=>{
  const status=el('monitor-report-status');
