@@ -99,6 +99,14 @@ jobs:
             $goalState = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/cognition/goals' -TimeoutSec 10
             if ($goalState.items.Count -ne 1) { throw 'Cognitive goals not persisted' }
             if (-not (Test-Path -LiteralPath (Join-Path $dir 'data/cognitive-state.json'))) { throw 'Cognitive local state missing' }
+            $mind = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/supermind' -TimeoutSec 10
+            if ($mind.identity.name -ne 'Цукирэй' -or $mind.governor.executesCode -ne $false) { throw 'Supermind identity or safety governor failed' }
+            if ($mind.governor.cloudBudget.calls -ne 0) { throw 'Supermind must not make paid Cloud requests' }
+            $mindScan = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/supermind/scan' -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 15
+            if ($mindScan.status.scanCount -lt 1) { throw 'Supermind autobiography synchronization failed' }
+            $mindInquiry = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/supermind/inquiries' -Method Post -ContentType 'application/json' -Body '{"question":"Why does local RAG sometimes return no answers?"}' -TimeoutSec 10
+            if ($mindInquiry.inquiry.hypotheses.Count -lt 2) { throw 'Supermind hypothesis workflow failed' }
+            if (-not (Test-Path -LiteralPath (Join-Path $dir 'data/supermind-state.json'))) { throw 'Supermind local archive not persisted' }
             $config = Get-Content -LiteralPath (Join-Path $dir 'data/portable-postgres.json') -Raw | ConvertFrom-Json
             if (([IO.Path]::GetPathRoot($config.store)) -ne ([IO.Path]::GetPathRoot($dir))) { throw 'Database not stored on the same drive' }
             if ($config.store -notmatch '^[\x20-\x7E]+$') { throw 'Database physical path must be ASCII' }
