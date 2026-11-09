@@ -13,6 +13,7 @@
 <body>
   <svg class="icons" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
     <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
     <symbol id="i-memory" viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-7.8 1.3A5 5 0 0 0 3 13a4.5 4.5 0 0 0 5 7 4.5 4.5 0 0 0 4-3 4.5 4.5 0 0 0 4 3 4.5 4.5 0 0 0 5-7 5 5 0 0 0-1.2-8.7A4 4 0 0 0 12 3z"/><path d="M12 3v14m-6-9 3 2m9-2-3 2M6 15l3-1m9 1-3-1"/></symbol>
     <symbol id="i-tasks" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 1.5 1.5L12 8m2 2h3M8 16h9"/></symbol>
     <symbol id="i-agents" viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"/><path d="M12 3v4M9 3h6M8 12h.01M16 12h.01M9 16h6M2 11v4m20-4v4"/></symbol>
@@ -34,6 +35,7 @@
       <nav class="nav" aria-label="Разделы">
         <button class="nav-button selected" data-page="home" data-label="Главная" aria-label="Главная" aria-current="page"><svg><use href="#i-home"/></svg></button>
         <button class="nav-button" data-page="memory" data-label="Память" aria-label="Память"><svg><use href="#i-memory"/></svg></button>
+        <button class="nav-button" data-page="search" data-label="RAG и документы" aria-label="RAG и документы"><svg><use href="#i-search"/></svg></button>
         <button class="nav-button" data-page="tasks" data-label="Дела" aria-label="Дела"><svg><use href="#i-tasks"/></svg></button>
         <button class="nav-button" data-page="agents" data-label="Агенты" aria-label="Агенты"><svg><use href="#i-agents"/></svg></button>
       </nav>
@@ -49,7 +51,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.6</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.7</span></div>
       </header>
 
       <main class="main">
@@ -99,6 +101,53 @@
           </div>
         </section>
 
+        <section class="page" id="page-search" hidden aria-labelledby="search-title">
+          <div class="page-heading">
+            <div><div class="eyebrow"><span class="small-line"></span> RAG ENGINE / LOCAL SEARCH</div>
+              <h1 id="search-title">Поиск по <em>памяти.</em></h1>
+              <p>Находите сохранённые знания и документы без дополнительных запросов Cloud.ru.</p>
+            </div>
+            <span class="date-chip" id="rag-status">Локальный поиск</span>
+          </div>
+          <div class="rag-layout">
+            <div class="rag-primary">
+              <form id="rag-search-form" class="glass-panel rag-search-form">
+                <label class="panel-kicker" for="rag-query">ПОИСК ПО ЗНАНИЯМ</label>
+                <div class="rag-search-controls">
+                  <input id="rag-query" type="search" maxlength="500" placeholder="Что вы хотите вспомнить?" required>
+                  <button type="submit" class="gold-button"><svg><use href="#i-search"/></svg> Найти</button>
+                </div>
+                <p class="rag-hint">Поиск по заметкам, сохранённым диалогам, базе знаний PostgreSQL и импортированным текстам.</p>
+              </form>
+              <div class="list-heading rag-results-heading"><h2>Найденные фрагменты</h2><span id="rag-results-meta">Ожидаю запрос</span></div>
+              <div id="rag-results" class="rag-results" aria-live="polite">
+                <div class="empty-state">Введите запрос, чтобы найти информацию в памяти.</div>
+              </div>
+            </div>
+            <aside class="rag-aside">
+              <form id="rag-import-form" class="glass-panel rag-import">
+                <span class="panel-kicker">ЛИЧНАЯ БИБЛИОТЕКА</span>
+                <h2>Добавить документ</h2>
+                <label for="rag-file">Файл TXT, MD, CSV или JSON</label>
+                <input id="rag-file" type="file" accept=".txt,.md,.markdown,.csv,.json,text/plain,text/markdown,text/csv,application/json">
+                <label for="rag-title">Название</label>
+                <input id="rag-title" type="text" maxlength="150" placeholder="Название документа" required>
+                <label for="rag-content">Текст</label>
+                <textarea id="rag-content" rows="6" maxlength="100000" placeholder="Вставьте текст сюда или выберите файл выше"></textarea>
+                <p class="rag-hint">Файл сохраняется локально в PostgreSQL. Обработка происходит только после добавления.</p>
+                <button type="submit" class="gold-button"><svg><use href="#i-plus"/></svg> Сохранить документ</button>
+                <div id="rag-import-status" class="rag-feedback" role="status" aria-live="polite"></div>
+              </form>
+              <div class="glass-panel rag-library">
+                <div class="list-heading"><h2>Документы</h2><span id="rag-document-count">0</span></div>
+                <div id="rag-document-list" class="rag-document-list">
+                  <p class="rag-hint">Документы ещё не загружены.</p>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
         <section class="page" id="page-tasks" hidden aria-labelledby="tasks-title">
           <div class="page-heading"><div><div class="eyebrow"><span class="small-line"></span> TASKS / WORKSPACE</div><h1 id="tasks-title">Ваши <em>дела.</em></h1><p>Простой список задач. Всё работает локально.</p></div><span class="date-chip" id="task-count">0 активных</span></div>
           <form id="task-form" class="inline-form glass-panel"><label class="sr-only" for="task-title">Новая задача</label><input id="task-title" name="title" maxlength="160" placeholder="Что нужно сделать?" required><button type="submit" class="gold-button"><svg><use href="#i-plus"/></svg> Добавить</button></form>
@@ -130,6 +179,7 @@
     <div class="chat-panel" id="chat-panel" hidden role="dialog" aria-label="Чат Цукирэй">
       <div class="chat-heading"><div class="chat-identity"><div class="avatar-small">✦</div><div><strong>Цукирэй</strong><span id="chat-provider">Cloud.ru · не подключён</span></div></div><div class="chat-controls"><button id="clear-chat" class="icon-button" aria-label="Очистить историю диалога" title="Очистить историю"><svg><use href="#i-trash"/></svg></button><button id="chat-close" class="icon-button" aria-label="Закрыть чат"><svg><use href="#i-close"/></svg></button></div></div>
       <div class="chat-thread" id="chat-thread"><div class="chat-welcome"><span>✦</span><strong>Ваш диалог с Цукирэй</strong><p>Для настоящего ответа ИИ сначала сохраните ключ и модель Cloud.ru в настройках.</p></div></div>
+      <div class="chat-memory-option"><label for="chat-use-memory"><input type="checkbox" id="chat-use-memory" checked> Использовать память (RAG)</label><small>Найденные фрагменты отправятся в Cloud.ru вместе с вопросом.</small></div>
       <form class="chat-compose" id="chat-form"><label class="sr-only" for="chat-input">Сообщение</label><textarea id="chat-input" rows="2" maxlength="8000" placeholder="Напишите сообщение..."></textarea><button type="submit" class="send-button" id="chat-send" aria-label="Отправить сообщение"><svg><use href="#i-send"/></svg></button></form>
       <div class="chat-disclaimer">Ответы Cloud.ru могут быть неточными. Запрос отправляется только при нажатии «Отправить».</div>
     </div>

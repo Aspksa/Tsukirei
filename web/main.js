@@ -1,10 +1,12 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
+const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
 let toastTimer;
+let chatSources = [];
+let ragDocsLoaded = false;
 function escapeNotNeeded(tag, cls, text) {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
@@ -62,6 +64,7 @@ function go(page) {
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
   window.location.hash = page;
+  if (page === 'search') refreshRagDocuments();
 }
 function renderStatus() {
   const settings = viewState.settings;
@@ -99,6 +102,7 @@ function renderNotes() {
   if (!viewState.notes.length) { list.append(escapeNotNeeded('div', 'empty-state', 'Заметок пока нет. Создайте первую запись.')); return; }
   viewState.notes.forEach(note => {
     const article = escapeNotNeeded('article', 'entry-card');
+    article.dataset.noteId = note.id;
     const top = escapeNotNeeded('div', 'entry-card-top');
     top.append(escapeNotNeeded('h3', '', note.title));
     top.append(removeButton(() => run(async () => {
@@ -153,6 +157,18 @@ function renderChat() {
     bubble.append(escapeNotNeeded('p', '', message.content));
     list.append(bubble);
   });
+  if (chatSources.length) {
+    const details = escapeNotNeeded('details', 'chat-rag-sources');
+    const summary = escapeNotNeeded('summary', '', 'Источники памяти (' + chatSources.length + ')');
+    details.append(summary);
+    chatSources.forEach(source => {
+      const item = escapeNotNeeded('div', 'chat-source-entry');
+      item.append(escapeNotNeeded('strong', '', source.label + ' ' + source.title),
+        escapeNotNeeded('p', '', source.excerpt));
+      details.append(item);
+    });
+    list.append(details);
+  }
   list.scrollTop = list.scrollHeight;
 }
 function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
@@ -235,8 +251,9 @@ el('chat-form').addEventListener('submit', event => {
     if (!viewState.settings.configured) { notify('Сначала подключите Cloud.ru в настройках', true); go('settings'); return; }
     busy = true; el('chat-send').disabled = true; el('chat-input').disabled = true;
     try {
-      const result = await api('/api/chat', { method: 'POST', body: { prompt } });
+      const result = await api('/api/chat', { method: 'POST', body: { prompt, useMemory: el('chat-use-memory').checked } });
       viewState.messages = result.messages;
+      chatSources = Array.isArray(result.sources) ? result.sources : [];
       el('chat-input').value = '';
       render(); 
     } finally { busy = false; el('chat-send').disabled = false; el('chat-input').disabled = false; el('chat-input').focus(); }
@@ -245,8 +262,106 @@ el('chat-form').addEventListener('submit', event => {
 el('clear-chat').addEventListener('click', () => run(async () => {
   if (!viewState.messages.length || !window.confirm('Очистить историю диалога на этом устройстве?')) return;
   const result = await api('/api/chat/clear', { method: 'POST', body: {} });
-  viewState.messages = result.messages; render();  notify('История диалога очищена');
+  viewState.messages = result.messages; chatSources = []; render(); notify('История диалога очищена');
 }));
+
+
+async function refreshRagDocuments() {
+  const items = el('rag-document-list');
+  if (!viewState.database.connected) {
+    el('rag-status').textContent = 'Поиск по памяти';
+    items.replaceChildren(escapeNotNeeded('p', 'rag-hint', 'Для импорта документов нужен PostgreSQL + pgvector. Поиск по заметкам и чатам доступен.'));
+    el('rag-document-count').textContent = '0';
+    return;
+  }
+  try {
+    const result = await api('/api/rag/documents');
+    items.replaceChildren();
+    const documents = Array.isArray(result.items) ? result.items : [];
+    el('rag-document-count').textContent = String(documents.length);
+    el('rag-status').textContent = 'RAG · PostgreSQL';
+    if (!documents.length) {
+      items.append(escapeNotNeeded('p', 'rag-hint', 'Документов пока нет.'));
+    }
+    documents.forEach(doc => {
+      const card = escapeNotNeeded('div', 'rag-document-entry');
+      const meta = escapeNotNeeded('div', 'rag-document-meta');
+      meta.append(escapeNotNeeded('strong', '', doc.title),
+        escapeNotNeeded('small', '', doc.parts + ' фрагментов · ' + doc.source));
+      card.append(meta,removeButton(() => run(async () => {
+        if (!window.confirm('Удалить документ «' + doc.title + '» из RAG?')) return;
+        await api('/api/rag/documents/' + encodeURIComponent(doc.id), { method: 'DELETE' });
+        await refreshRagDocuments();
+        notify('Документ удалён из RAG');
+      })));
+      items.append(card);
+    });
+  } catch (error) {
+    items.replaceChildren(escapeNotNeeded('p', 'rag-hint', 'Не удалось получить документы: ' + error.message));
+  }
+}
+el('rag-search-form').addEventListener('submit', event => {
+  event.preventDefault();
+  run(async () => {
+    const query = el('rag-query').value.trim();
+    const resultBox = el('rag-results');
+    resultBox.replaceChildren(escapeNotNeeded('div', 'empty-state', 'Ищу по локальной памяти…'));
+    const result = await api('/api/rag/search', { method: 'POST', body: { query, limit: 12 } });
+    const matches = Array.isArray(result.items) ? result.items : [];
+    el('rag-results-meta').textContent = matches.length + ' найдено · ' + (result.mode === 'hybrid' ? 'Гибридный' : 'Лексический') + ' поиск';
+    resultBox.replaceChildren();
+    if (!matches.length) {
+      resultBox.append(escapeNotNeeded('div', 'empty-state', 'Подходящих записей не найдено.'));
+      return;
+    }
+    const kindNames = {note:'Заметка',dialogue:'Диалог',knowledge:'Знание',document:'Документ'};
+    matches.forEach(source => {
+      const card = escapeNotNeeded('article', 'rag-result-card');
+      const heading = escapeNotNeeded('div', 'rag-result-heading');
+      heading.append(escapeNotNeeded('span', 'panel-kicker', kindNames[source.kind] || 'Запись'),
+        escapeNotNeeded('small', '', source.label + ' · ' + source.score));
+      card.append(heading, escapeNotNeeded('h3', '', source.title),
+        escapeNotNeeded('p', 'rag-excerpt', source.excerpt));
+      if (source.kind === 'note') {
+        const action = escapeNotNeeded('button', 'text-action', 'Показать заметку →');
+        action.type = 'button';
+        action.addEventListener('click', () => {
+          go('memory');
+          const note = Array.from(document.querySelectorAll('[data-note-id]'))
+            .find(node => node.dataset.noteId === source.id);
+          if (note) note.scrollIntoView({ behavior:'smooth', block:'center' });
+        });
+        card.append(action);
+      }
+      resultBox.append(card);
+    });
+  });
+});
+el('rag-file').addEventListener('change', () => run(async () => {
+  const file = el('rag-file').files?.[0];
+  if (!file) return;
+  if (!/\.(txt|md|markdown|csv|json)$/i.test(file.name)) throw new Error('Разрешены TXT, MD, CSV и JSON.');
+  if (file.size > 320000) throw new Error('Размер файла ограничен 320 КБ. Разделите большой документ на части.');
+  if (!el('rag-title').value.trim()) el('rag-title').value = file.name.slice(0,150);
+  el('rag-content').value = (await file.text()).slice(0,100000);
+  el('rag-import-status').textContent = 'Текст файла загружен локально. Нажмите «Сохранить документ».';
+}));
+el('rag-import-form').addEventListener('submit', event => {
+  event.preventDefault();
+  run(async () => {
+    const title = el('rag-title').value.trim();
+    const content = el('rag-content').value.trim();
+    if (!content) throw new Error('Добавьте текст документа или выберите файл.');
+    el('rag-import-status').textContent = 'Сохраняю в локальную базу…';
+    const result = await api('/api/rag/documents', {
+      method:'POST',body:{ title,content,source:el('rag-file').files?.[0]?.name || 'manual' }
+    });
+    el('rag-import-form').reset();
+    el('rag-import-status').textContent = result.duplicate ?
+      'Такой документ уже сохранён. Дублирование предотвращено.' : 'Документ сохранён и добавлен в поиск.';
+    await refreshRagDocuments();
+  });
+});
 
 function showFailedStart(message) {
   el('status-text').textContent = 'Ошибка локального сервера';
