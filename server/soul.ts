@@ -34,6 +34,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
+  outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
 };
 
 const tones:Tone[]=['нежный','спокойный','деловой'];
@@ -62,7 +63,8 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[]
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],
+    outreach:{lastPreparedAt:null,items:[]}
   };
 }
 function validate(value:unknown):SoulData {
@@ -75,6 +77,7 @@ function validate(value:unknown):SoulData {
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
+  if(!state.outreach||!Array.isArray(state.outreach.items))state.outreach={lastPreparedAt:null,items:[]};
   if(!state.growth||!Array.isArray(state.growth.history))state.growth={lastReviewedAt:null,reviews:0,history:[]};
   if(typeof state.metrics.completedTasks!=='number')state.metrics.completedTasks=0;
   if(!tones.includes(state.settings.tone)||typeof state.settings.address!=='string')
@@ -163,6 +166,41 @@ export class SoulEngine {
   }
   qualityReport(){
     return feedbackQuality(this.data.feedbackEvents??[]);
+  }
+  outreachInbox(){
+    return {items:(this.data.outreach?.items??[]).filter(i=>i.status==='pending').slice(0,10),
+      policy:'Предложения появляются только внутри приложения при открытии; внешние сообщения не отправляются.'};
+  }
+  async prepareOutreach(now=new Date()){
+    return this.modify(()=>{
+      if(!this.data.settings.initiativeEnabled||!this.data.settings.reflectionsEnabled)
+        return {created:0,reason:'Инициативы или рефлексия отключены'};
+      const state:NonNullable<SoulData['outreach']>=this.data.outreach??{lastPreparedAt:null,items:[]};
+      const last=Date.parse(state.lastPreparedAt??'');
+      if(Number.isFinite(last)&&now.getTime()-last<24*86400000)return {created:0,reason:'Проверка уже проводилась'};
+      state.lastPreparedAt=now.toISOString();
+      const existing=new Set(state.items.map(i=>i.id));
+      let created=0;
+      for(const initiative of this.data.initiatives.filter(i=>i.status==='new'&&i.sourceIds.length>=2)){
+        const id='initiative:'+initiative.id;
+        if(existing.has(id))continue;
+        state.items.unshift({id,at:now.toISOString(),title:initiative.title,
+          reason:initiative.reason,sourceIds:initiative.sourceIds.slice(0,6),status:'pending'});
+        existing.add(id);created++;
+        if(created>=2)break;
+      }
+      state.items=state.items.slice(0,40);
+      this.data.outreach=state;
+      return {created};
+    });
+  }
+  dismissOutreach(id:string){
+    return this.modify(()=>{
+      const item=this.data.outreach?.items.find(i=>i.id===id);
+      if(!item)throw new Error('Предложение не найдено');
+      item.status='dismissed';
+      return {dismissed:true};
+    });
   }
   conversationPlan(now=new Date()){
     const d=this.data;
