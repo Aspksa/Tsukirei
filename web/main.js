@@ -255,15 +255,27 @@ el('brain-zoom-reset').addEventListener('click',resetBrainViewport);
 }
 
 let selectedBrainTopic=null;
+let brainVisibleLimit=70;
+let brainGraphRequest=0;
+el('brain-load-more').addEventListener('click',()=>{
+  brainVisibleLimit=Math.min(350,brainVisibleLimit+70);
+  void refreshBrainKnowledge();
+});
 async function refreshBrainKnowledge(){
   const svg=el('brain-map-svg');
   const detail=el('brain-graph-detail');
   const query=el('brain-graph-query').value.trim().slice(0,70);
+  const requestId=++brainGraphRequest;
   detail.textContent='Загружаю связи с указанием источников...';
   try{
-    const graph=await api('/api/cognition/world'+(query?'?q='+encodeURIComponent(query):''));
-    const rawNodes=Array.isArray(graph.nodes)?graph.nodes.slice(0,180):[];
-    const rawEdges=Array.isArray(graph.edges)?graph.edges.slice(0,150):[];
+    const params=new URLSearchParams({limit:String(brainVisibleLimit)});
+    if(query)params.set('q',query);
+    const graph=await api('/api/cognition/world?'+params.toString());
+    if(requestId!==brainGraphRequest)return;
+    const rawNodes=Array.isArray(graph.nodes)?graph.nodes:[];
+    const rawEdges=Array.isArray(graph.edges)?graph.edges:[];
+    el('brain-visible-count').textContent='На карте: '+rawNodes.length+' из '+(graph.totalNodes??rawNodes.length);
+    el('brain-load-more').hidden=!graph.hasMore;
     const neighbors=new Map(rawNodes.map(n=>[String(n.id),new Set()]));
     for(const edge of rawEdges){
       const a=String(edge.from),b=String(edge.to);
@@ -301,7 +313,7 @@ async function refreshBrainKnowledge(){
       topicButton(String(first?.label||'Тема '+(i+1)).slice(0,24)+' · '+topics[i].length,i);
     }
     const visibleIds=selectedBrainTopic===null?null:new Set(topics[selectedBrainTopic]);
-    const allNodes=rawNodes.filter(n=>!visibleIds||visibleIds.has(String(n.id))).slice(0,70);
+    const allNodes=rawNodes.filter(n=>!visibleIds||visibleIds.has(String(n.id)));
     const included=new Set(allNodes.map(n=>String(n.id)));
     const allEdges=rawEdges.filter(e=>included.has(String(e.from))&&included.has(String(e.to)));
     const nodes=allNodes.map((node,i)=>({
@@ -368,7 +380,7 @@ async function refreshBrainKnowledge(){
     el('brain-footnote').textContent='Граф строится из локально сохранённых связей Cognitive Core. Cloud.ru не вызывается.';
   }catch(error){detail.textContent='Не удалось загрузить граф: '+(error.message||'ошибка');}
 }
-el('brain-graph-search').addEventListener('click',()=>{selectedBrainTopic=null;void refreshBrainKnowledge();});
+el('brain-graph-search').addEventListener('click',()=>{selectedBrainTopic=null;brainVisibleLimit=70;void refreshBrainKnowledge();});
 el('brain-graph-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void refreshBrainKnowledge();}});
 el('brain-graph-overview').addEventListener('click',()=>{selectedBrainTopic=null;el('brain-map-svg').setAttribute('viewBox','0 0 700 230');void refreshBrainOverview();});
 
