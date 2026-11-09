@@ -181,10 +181,8 @@ export class SuperMind{
         added+=this.track('chat:'+message.id,'dialogue','Совместный разговор',
           'Запись разговора сохранена в архиве',message.createdAt);
       }
-      for(const task of state.tasks.filter(t=>t.done).slice(-100)){
-        added+=this.track('task:'+task.id,'milestone','Выполнено: '+task.title,
-          'В задаче установлен признак выполнения владельцем',task.createdAt);
-      }
+      // A task's creation date is not its completion date. Completion milestones
+      // are recorded exclusively from Soul Engine events, which have the actual time.
       for(const event of soul.journal.filter(e=>e.type==='task'||e.type==='feedback').slice(0,65)){
         added+=this.track('soul:'+event.id,'milestone',event.type==='task'?'Отмечен рабочий результат':'Получена обратная связь',
           event.text,event.at);
@@ -255,6 +253,14 @@ export class SuperMind{
       const result=input.result;
       if(!['supports','refutes','inconclusive'].includes(String(result)))throw Error('Недопустимый итог');
       const note=validateMeaning(input.note,'Описание проверки',300,15);
+      const changed=hypothesis.outcome!==result||hypothesis.note!==note;
+      if(changed){
+        // A changed test invalidates prior owner-confirmed principles.
+        for(const value of this.data.wisdom){
+          if(value.status==='approved'&&value.source.inquiryId===inquiryId&&
+            value.source.hypothesisId===hypothesisId)value.status='revoked';
+        }
+      }
       hypothesis.outcome=result as TestOutcome;hypothesis.note=note;hypothesis.testedAt=this.now();
       if(inquiry.hypotheses.every(h=>h.outcome!=='untested'))inquiry.status='reviewed';
       this.save();return{...hypothesis,provenance:'Результат сообщил владелец, автоматической проверки не было'};
