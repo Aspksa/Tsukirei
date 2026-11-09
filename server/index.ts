@@ -224,7 +224,7 @@ async function chat(prompt: string, useMemory = true) {
     }
     const messages = [
       {role:'system',content:identity.prompt(useMemory)+
-        (useMemory?'\n'+learning.prompt():'')+'\n'+
+        (useMemory?'\n'+learning.prompt()+'\n'+soul.conversationGuidance():'')+'\n'+
         (assessment&&assessment.level==='insufficient'?
           'Локальные источники плохо покрывают вопрос; явно отделяй гипотезы от проверенных сведений.\n':'')+
         'Ты Цукирэй, полезная персональная ИИ-помощница. Отвечай по-русски. '+
@@ -483,6 +483,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try{json(res,200,{idea:await living.decide(id,input.action,input.note)});}
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
+  }
+  if (method === 'GET' && pathname === '/api/soul/conversation-plan') {
+    json(res,200,soul.conversationPlan());return;
   }
   if (method === 'GET' && pathname === '/api/soul/quality') {
     json(res,200,soul.qualityReport());return;
