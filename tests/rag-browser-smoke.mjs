@@ -55,7 +55,7 @@ try{
  },'Chrome DevTools port');
  const wsUrl=await until(async()=>{
   const items=await(await fetch('http://127.0.0.1:'+port+'/json/list')).json();
-  return items.find(x=>x.type==='page')?.webSocketDebuggerUrl;
+  return items.find(x=>x.type==='page'&&x.url?.startsWith(base))?.webSocketDebuggerUrl;
  },'Chrome tab');
  const ws=new WebSocket(wsUrl);
  await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true});});
@@ -79,7 +79,7 @@ try{
   return result.result?.value;
  };
  await send('Runtime.enable');
- await until(()=>evaluate("document.readyState === 'complete' && document.querySelector('#status-text')?.textContent !== 'Подключение...'"),'application ready');
+ await until(()=>evaluate("document.readyState === 'complete' && !!document.querySelector('#status-text') && document.querySelector('#status-text').textContent !== 'Подключение...' && !!document.querySelector('[data-page=search]') && !!document.querySelector('[data-page=living]')"),'application ready with navigation');
  await evaluate("document.querySelector('[data-page=search]').click();true");
  assert.equal(await evaluate("document.getElementById('page-search').hidden"),false);
  await evaluate("(()=>{const input=document.getElementById('rag-query');input.value='шпилька Subaru';document.getElementById('rag-search-form').requestSubmit();return true;})()");
