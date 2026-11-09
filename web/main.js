@@ -620,7 +620,7 @@ window.addEventListener('hashchange',()=>{
 });
 el('orb-open').addEventListener('click', () => go('memory'));
 function setMobileMenu(open){
- if(open && !el('chat-panel').hidden) toggleChat(false);
+ if(open && !el('chat-panel').hidden) { toggleChat(false); el('mobile-menu').focus(); }
  el('shell').classList.toggle('menu-open',open);
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
