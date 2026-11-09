@@ -36,7 +36,7 @@ function queueRagIndex(){
 }
 async function askRag(query:string,limit:number,embedding?:number[],traceId?:string){
   const measured=async <T>(stage:string,target:string,operation:()=>Promise<T>):Promise<T> =>
-    traceId?monitorStage(traceId,stage,target,operation):operation();
+    traceId?monitorStage(traceId,stage,target,operation,'Поиск памяти'):operation();
   const workerState=ragWorker?.status();
   // During writes or a background reindex, read directly from the source of truth.
   // Never answer from an index known to be stale.
@@ -211,17 +211,17 @@ async function cloudModels() {
     .map(item => item.id).filter((id): id is string => typeof id === 'string')
     .slice(0, 300);
 }
-type MonitorStep={id:number;traceId:string;at:string;stage:string;target:string;status:'ok'|'error';durationMs:number};
+type MonitorStep={id:number;traceId:string;at:string;stage:string;target:string;status:'ok'|'error';durationMs:number;startedAt:string;parentStage?:string};
 const monitorSteps:MonitorStep[]=[];
 let monitorStepSequence=0;
-function monitorRecord(traceId:string,stage:string,target:string,status:'ok'|'error',started:number){
- monitorSteps.push({id:++monitorStepSequence,traceId,at:new Date().toISOString(),stage,target,status,durationMs:Math.max(0,Math.round(performance.now()-started))});
+function monitorRecord(traceId:string,stage:string,target:string,status:'ok'|'error',started:number,startedAt=new Date().toISOString(),parentStage?:string){
+ monitorSteps.push({id:++monitorStepSequence,traceId,at:new Date().toISOString(),stage,target,status,startedAt,parentStage,durationMs:Math.max(0,Math.round(performance.now()-started))});
  if(monitorSteps.length>60)monitorSteps.splice(0,monitorSteps.length-60);
 }
-async function monitorStage<T>(traceId:string,stage:string,target:string,operation:()=>Promise<T>):Promise<T>{
- const started=performance.now();
- try{const result=await operation();monitorRecord(traceId,stage,target,'ok',started);return result;}
- catch(error){monitorRecord(traceId,stage,target,'error',started);throw error;}
+async function monitorStage<T>(traceId:string,stage:string,target:string,operation:()=>Promise<T>,parentStage?:string):Promise<T>{
+ const started=performance.now(),startedAt=new Date().toISOString();
+ try{const result=await operation();monitorRecord(traceId,stage,target,'ok',started,startedAt,parentStage);return result;}
+ catch(error){monitorRecord(traceId,stage,target,'error',started,startedAt,parentStage);throw error;}
 }
 async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
   if (cloudBusy) throw new HttpError(429, 'Предыдущий запрос ещё выполняется');

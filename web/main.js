@@ -796,6 +796,46 @@ function monitorStageSource(stage){
  if(stage==='Ответ модели')return 'server/index.ts · Cloud.ru API';
  return 'server/index.ts · обработчик';
 }
+function renderMonitorWaterfall(items){
+ const host=el('monitor-trace-waterfall');host.replaceChildren();
+ const groups=new Map();
+ for(const item of items){
+  const start=Date.parse(item.startedAt||'');
+  if(!Number.isFinite(start))continue;
+  const id=String(item.traceId||'unknown');
+  if(!groups.has(id))groups.set(id,[]);
+  groups.get(id).push({...item,start});
+ }
+ if(!groups.size){
+  const empty=document.createElement('p');empty.className='brain-trace-empty';
+  empty.textContent='Временная шкала появится после новых запросов чата.';host.append(empty);return;
+ }
+ for(const [id,chain] of groups){
+  const min=Math.min(...chain.map(item=>item.start));
+  const max=Math.max(...chain.map(item=>item.start+Math.max(0,Number(item.durationMs)||0)));
+  const span=Math.max(1,max-min);
+  const section=document.createElement('section');section.className='monitor-waterfall-chain';
+  const heading=document.createElement('h4');heading.textContent='Цепочка '+id.slice(0,8)+' · '+Math.round(span)+' мс, наблюдаемый интервал';
+  section.append(heading);
+  chain.sort((a,b)=>a.start-b.start||Number(a.id)-Number(b.id));
+  for(const item of chain){
+   const row=document.createElement('div');row.className='monitor-waterfall-row';
+   if(item.parentStage)row.dataset.nested='true';
+   const label=document.createElement('span');label.className='monitor-waterfall-label';
+   label.textContent=(item.parentStage?'↳ ':'')+String(item.stage||'Этап');
+   const track=document.createElement('div');track.className='monitor-waterfall-track';
+   const bar=document.createElement('div');bar.className='monitor-waterfall-bar';
+   bar.dataset.ok=String(item.status==='ok');
+   bar.style.left=((item.start-min)/span*100)+'%';
+   bar.style.width=Math.max(0.5,Math.min(100,Number(item.durationMs)||0)/span*100)+'%';
+   bar.title=String(item.stage||'Этап')+' · '+String(item.durationMs)+' мс';
+   track.append(bar);
+   const duration=document.createElement('span');duration.className='monitor-waterfall-duration';duration.textContent=String(item.durationMs)+' мс';
+   row.append(label,track,duration);section.append(row);
+  }
+  host.append(section);
+ }
+}
 function renderMonitorTraceGraph(items){
  const graph=el('monitor-trace-graph'),detail=el('monitor-graph-detail');
  graph.replaceChildren();
@@ -859,6 +899,7 @@ function renderMonitorServerSteps(){
  const list=el('monitor-server-steps'),selected=el('monitor-trace-select').value;
  const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
  renderMonitorTraceGraph(items);
+ renderMonitorWaterfall(items);
  list.replaceChildren();
  el('monitor-trace-count').textContent=items.length+' этапов';
  if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Нет этапов для выбранной цепочки. Отправьте сообщение и обновите.';list.append(empty);return;}

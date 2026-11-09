@@ -73,6 +73,9 @@
             <div class="monitor-server-head"><div><h3>Этапы обработки ответа</h3><p>Подтверждённые сервером события: чтение истории, поиск памяти и запрос модели. Только метаданные.</p></div><button type="button" class="ghost-button" id="monitor-server-refresh">Обновить этапы</button></div>
             <div class="monitor-trace-picker"><label for="monitor-trace-select">Цепочка запроса</label><select id="monitor-trace-select"><option value="all">Все запросы</option></select><span id="monitor-trace-count">0 этапов</span></div>
             <div class="monitor-graph-head"><h3>Карта выполнения</h3><span>Только зарегистрированные этапы · без вымышленных связей</span></div>
+            <div class="monitor-waterfall-head"><h3>Временная шкала</h3><span>Начало и длительность зарегистрированных этапов</span></div>
+            <div id="monitor-trace-waterfall" class="monitor-trace-waterfall" aria-label="Временная шкала серверных операций"><p class="brain-trace-empty">Нет данных о времени операций.</p></div>
+            <p class="monitor-waterfall-note">Вложенные этапы RAG входят во время «Поиска памяти». Суммировать длительности всех строк нельзя.</p>
             <div id="monitor-trace-graph" class="monitor-trace-graph" aria-label="Граф этапов обработки выбранной цепочки"><p class="brain-trace-empty">Выберите цепочку после отправки сообщения.</p></div>
             <p id="monitor-graph-detail" class="monitor-graph-detail" aria-live="polite">Нажмите на узел графа, чтобы посмотреть время, статус и назначение операции.</p>
             <div id="monitor-server-steps" class="monitor-server-steps" role="log" aria-label="Серверные этапы обработки"><p class="brain-trace-empty">Нажмите «Обновить этапы», чтобы получить события сервера.</p></div>
