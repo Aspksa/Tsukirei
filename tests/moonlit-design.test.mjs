@@ -59,3 +59,10 @@ test('mobile navigation is accessible and dismissible',()=>{
  assert.match(css,/\.sidebar\{visibility:hidden;pointer-events:none/);
  assert.match(css,/\.menu-open \.sidebar\{visibility:visible;pointer-events:auto/);
 });
+
+test('chat and mobile navigation never stay open together',()=>{
+ assert.match(main,/if \(open && el\('shell'\)\.classList\.contains\('menu-open'\)\) setMobileMenu\(false\)/);
+ assert.match(main,/if\(open && !el\('chat-panel'\)\.hidden\) \{ toggleChat\(false\); el\('mobile-menu'\)\.focus\(\); \}/);
+ assert.match(main,/event\.stopImmediatePropagation\(\)/);
+ assert.match(main,/if \(event\.key === 'Escape' && !el\('chat-panel'\)\.hidden\)/);
+});
