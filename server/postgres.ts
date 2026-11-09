@@ -88,11 +88,14 @@ export async function connectPostgres(dataDir: string) {
       content text NOT NULL,
       part integer NOT NULL DEFAULT 0,
       checksum text NOT NULL,
+      source_created_at timestamptz,
       embedding vector,
       embedding_model text,
       scan_token text NOT NULL,
       updated_at timestamptz NOT NULL DEFAULT now()
     )`;
+    await sql`ALTER TABLE tsukirei_rag_index
+      ADD COLUMN IF NOT EXISTS source_created_at timestamptz`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_index_text_idx
       ON tsukirei_rag_index USING gin (to_tsvector('simple',title || ' ' || content))`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_index_source_idx
@@ -270,15 +273,18 @@ export async function connectPostgres(dataDir: string) {
       },
       async upsertRagSource(item:SourceDoc,scanToken:string):Promise<{changed:boolean}> {
         const checksum=sha(item.title+'\n'+item.content);
+        const parsedDate=Date.parse(item.createdAt);
+        const sourceDate=Number.isFinite(parsedDate)?new Date(parsedDate).toISOString():null;
         const result=await sql`INSERT INTO tsukirei_rag_index
-          (source_key,kind,source_id,title,content,part,checksum,scan_token)
+          (source_key,kind,source_id,title,content,part,checksum,scan_token,source_created_at)
           VALUES (${item.key},${item.kind},${item.sourceId},
-            ${item.title},${item.content},${item.part??0},${checksum},${scanToken})
+            ${item.title},${item.content},${item.part??0},${checksum},${scanToken},${sourceDate})
           ON CONFLICT (source_key) DO UPDATE SET
             kind=EXCLUDED.kind,source_id=EXCLUDED.source_id,
             title=EXCLUDED.title,content=EXCLUDED.content,part=EXCLUDED.part,
             checksum=EXCLUDED.checksum,embedding=NULL,embedding_model=NULL,
-            scan_token=EXCLUDED.scan_token,updated_at=now()
+            scan_token=EXCLUDED.scan_token,source_created_at=EXCLUDED.source_created_at,
+            updated_at=now()
           WHERE tsukirei_rag_index.checksum IS DISTINCT FROM EXCLUDED.checksum
           RETURNING source_key`;
         if(!result.length){
@@ -345,12 +351,14 @@ export async function connectPostgres(dataDir: string) {
         return Boolean(rows.length);
       },
       async ragInspect(limit=1000):Promise<SourceDoc[]>{
-        const rows=await sql`SELECT source_key,kind,source_id,title,content,part,updated_at
+        const rows=await sql`SELECT source_key,kind,source_id,title,content,part,source_created_at,updated_at
           FROM tsukirei_rag_index ORDER BY updated_at DESC LIMIT ${limit}`;
         return rows.map(row=>({
           key:String(row.source_key),kind:row.kind,sourceId:String(row.source_id),
           title:String(row.title),content:String(row.content),part:Number(row.part),
-          createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
+          createdAt:(row.source_created_at||row.updated_at) instanceof Date
+            ?(row.source_created_at||row.updated_at).toISOString()
+            :String(row.source_created_at||row.updated_at)
         })) as SourceDoc[];
       },
       async ragGraph(term:string,limit=60) {
