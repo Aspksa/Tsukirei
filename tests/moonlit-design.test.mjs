@@ -131,3 +131,11 @@ test('monitor server stage UI is separate and fetches confirmed server records',
  assert.match(main,/if\(page==='monitor'\)void refreshMonitorServerSteps\(\)/);
  assert.match(css,/\.monitor-server-step\{/);
 });
+
+test('chat request trace IDs correlate browser and server stages',()=>{
+ assert.match(app,/id="monitor-trace-select"/);
+ assert.match(main,/res\.headers\.get\('X-Tsukirei-Trace-Id'\)/);
+ assert.match(main,/function renderMonitorServerSteps\(/);
+ assert.match(main,/item\.traceId===selected/);
+ assert.match(css,/\.monitor-trace-picker\{/);
+});
