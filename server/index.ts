@@ -263,9 +263,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id=pathname.slice('/api/living/ideas/'.length);
     if(!validId(id))throw new HttpError(400,'Неверный идентификатор идеи');
     const input=await bodyJson(req);
-    if(input.action!=='approve'&&input.action!=='reject'&&input.action!=='rollback')
-      throw new HttpError(400,'Укажите approve, reject либо rollback');
-    try{json(res,200,{idea:await living.decide(id,input.action)});}
+    if(input.action!=='approve'&&input.action!=='reject'&&input.action!=='rollback'&&input.action!=='verify')
+      throw new HttpError(400,'Укажите approve, verify, reject либо rollback');
+    try{json(res,200,{idea:await living.decide(id,input.action,input.note)});}
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
   }
