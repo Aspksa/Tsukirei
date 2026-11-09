@@ -26,3 +26,14 @@ test('goal detail and evidence confirmation are available',()=>{
  assert.ok(html.includes("data-open-step"));
  assert.ok(html.includes("count>=12"));
 });
+
+test('studio supports keyboard and asynchronous accessibility states',()=>{
+ assert.match(html,/class="skip-link" href="#main-content"/);
+ assert.match(html,/id="main-content" tabindex="-1"/);
+ assert.match(html,/id="updated" role="status" aria-live="polite"/);
+ assert.match(html,/dialog id="detail" aria-labelledby="detail-title"/);
+ assert.match(html,/\.btn:focus-visible/);
+ assert.match(html,/const sequence=\+\+loadSequence/);
+ assert.match(html,/if\(sequence!==loadSequence\)return/);
+ assert.match(html,/aria-busy/);
+});
