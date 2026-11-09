@@ -285,3 +285,10 @@
 .brain-footnote{margin-top:12px;line-height:1.6}
 @media(max-width:800px){.brain-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:460px){.brain-live{padding:16px}.brain-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.brain-graph-controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0}
+.brain-graph-controls label{font-size:12px;color:var(--muted)}
+.brain-graph-controls input{min-width:180px;flex:1;max-width:380px}
+.brain-graph-detail{min-height:40px;padding:10px 12px;border:1px solid rgba(196,158,89,.2);border-radius:10px;color:#d7c39b;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.brain-map svg g[role="button"]{cursor:pointer}
+.brain-map svg g[role="button"]:focus{outline:none;filter:drop-shadow(0 0 5px #d6ad63)}
