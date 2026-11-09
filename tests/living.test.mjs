@@ -138,3 +138,43 @@ test('Cloud model failure retains quota reservation and does not fabricate learn
  assert.match(later.cloud.skipped,/Лимит/);
  assert.equal(requests.length,1);
 });
+
+test('Indexed RAG knowledge is private until consent and drives supervised skill rollback',async t=>{
+ const {engine,requests,deps}=setup(t,(nth)=>({ideas:[{
+  kind:'skill',title:'Проверять источники RAG для ответа',
+  reason:'Проверенный документ объясняет необходимость поиска точного фрагмента.',
+  evidence:['rag:document:local-1:0'],
+  steps:['Найти актуальный исходный документ по теме пользователя',
+    'Сопоставить цитируемые сведения с исходным документом']
+ }]}));
+ let records=[{key:'document:local-1:0',kind:'document',title:'Локальное руководство',
+  content:'Очень приватный текст импортированного документа'}];
+ deps.indexed=async()=>records;
+ await engine.settings({cloudEnabled:true,maxCloudCallsPerDay:2});
+ const initial=await engine.run({cloud:true});
+ assert.equal(initial.cloud.added,1);
+ assert.ok(!JSON.stringify(requests[0].body).includes('Очень приватный текст'));
+ const idea=engine.status().ideas.find(x=>x.kind==='skill');
+ await engine.decide(idea.id,'approve');
+ await engine.decide(idea.id,'verify','Проверено по исходному локальному документу');
+ assert.equal(engine.skills().length,1);
+ await engine.settings({shareRecentText:true});
+ await engine.run({cloud:true});
+ assert.ok(JSON.stringify(requests[1].body).includes('Очень приватный текст'));
+ records=[];
+ await engine.run({cloud:false,force:true});
+ assert.equal(engine.skills().length,0);
+ assert.equal(engine.status().ideas.find(x=>x.id===idea.id).status,'rolled_back');
+ assert.ok(engine.status().journal.some(x=>x.kind==='rollback'));
+});
+test('Dream Memory notes duplicate records without altering them',async t=>{
+ const {engine,state}=setup(t);
+ state.notes=[
+  {id:'note-one',title:'Руководство',body:'Как работать с PostgreSQL и сохранять все знания в архиве.'},
+  {id:'note-two',title:'Руководство',body:'Как работать с PostgreSQL и сохранять все знания в архиве.'}
+ ];
+ const before=JSON.stringify(state.notes);
+ await engine.run({force:true});
+ assert.ok(engine.status().ideas.some(x=>x.kind==='reflection'&&x.evidence.includes('note:note-one')&&x.evidence.includes('note:note-two')));
+ assert.equal(JSON.stringify(state.notes),before);
+});
