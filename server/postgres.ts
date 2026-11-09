@@ -3,6 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from
 import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { chunkText, keywords, type RagSource } from './rag.ts';
+import { graphLinks, sha, type SourceDoc } from './rag-advanced.ts';
 
 export type Note = { id: string; title: string; body: string; createdAt: string };
 export type Task = { id: string; title: string; done: boolean; createdAt: string };
@@ -79,6 +80,33 @@ export async function connectPostgres(dataDir: string) {
     )`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_chunks_text_idx
       ON tsukirei_rag_chunks USING gin(searchable)`;
+    await sql`CREATE TABLE IF NOT EXISTS tsukirei_rag_index (
+      source_key text PRIMARY KEY,
+      kind text NOT NULL,
+      source_id text NOT NULL,
+      title text NOT NULL,
+      content text NOT NULL,
+      part integer NOT NULL DEFAULT 0,
+      checksum text NOT NULL,
+      embedding vector,
+      embedding_model text,
+      scan_token text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_index_text_idx
+      ON tsukirei_rag_index USING gin (to_tsvector('simple',title || ' ' || content))`;
+    await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_index_source_idx
+      ON tsukirei_rag_index (kind,source_id)`;
+    await sql`CREATE TABLE IF NOT EXISTS tsukirei_rag_graph (
+      source_key text NOT NULL REFERENCES tsukirei_rag_index(source_key) ON DELETE CASCADE,
+      subject text NOT NULL,
+      relation text NOT NULL,
+      object text NOT NULL,
+      evidence text NOT NULL,
+      PRIMARY KEY (source_key,subject,relation,object)
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_graph_subject_idx
+      ON tsukirei_rag_graph (subject)`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_knowledge_text_idx ON tsukirei_knowledge
       USING gin (to_tsvector('simple', content))`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_knowledge_vector_1024_idx ON tsukirei_knowledge
@@ -194,6 +222,142 @@ export async function connectPostgres(dataDir: string) {
           source:String(row.source),part:Number(row.part),
           createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at)
         }));
+      },
+      async ragSourcePage(kind:'notes'|'messages'|'knowledge'|'document',offset:number,limit:number) {
+        if(kind==='notes'||kind==='messages'){
+          const rows=await sql`SELECT jsonb_array_length(value -> ${kind})::integer AS total,
+            COALESCE((SELECT jsonb_agg(value -> ${kind} -> n ORDER BY n)
+              FROM generate_series(${offset},
+                LEAST(${offset + limit},jsonb_array_length(value -> ${kind}))-1) AS n
+            ),'[]'::jsonb) AS items,
+            updated_at::text AS revision
+            FROM tsukirei_state WHERE id=1`;
+          if(!rows.length)throw Error('Архив не найден');
+          const items=(rows[0].items || []) as Record<string,unknown>[];
+          return {total:Number(rows[0].total),revision:String(rows[0].revision),
+            items:items.map(value=>{
+              const id=String(value.id || '');
+              const note=kind==='notes';
+              const title=note?String(value.title || ''):value.role==='user'?'Реплика пользователя':'Ответ Цукирэй';
+              const content=note?String(value.title||'')+'\n'+String(value.body||''):String(value.content||'');
+              return {key:(note?'note:':'dialogue:')+id+':0',
+                kind:note?'note':'dialogue',sourceId:id,title,content,
+                createdAt:String(value.createdAt||''),part:0};
+            })};
+        }
+        if(kind==='knowledge'){
+          const count=await sql`SELECT count(*)::integer AS total FROM tsukirei_knowledge`;
+          const rows=await sql`SELECT id,content,source,created_at FROM tsukirei_knowledge
+            ORDER BY created_at,id LIMIT ${limit} OFFSET ${offset}`;
+          return {total:Number(count[0].total),revision:null,
+            items:rows.map(row=>({
+              key:'knowledge:'+row.id+':0',kind:'knowledge',sourceId:String(row.id),
+              title:String(row.source||'Знание'),content:String(row.content),
+              createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at),part:0
+            }))};
+        }
+        const count=await sql`SELECT count(*)::integer AS total FROM tsukirei_rag_chunks`;
+        const rows=await sql`SELECT d.id,d.title,d.created_at,c.part,c.content
+          FROM tsukirei_rag_chunks c JOIN tsukirei_rag_documents d ON d.id=c.document_id
+          ORDER BY d.id,c.part LIMIT ${limit} OFFSET ${offset}`;
+        return {total:Number(count[0].total),revision:null,
+          items:rows.map(row=>({
+            key:'document:'+row.id+':'+row.part,kind:'document',sourceId:String(row.id),
+            title:String(row.title),content:String(row.content),
+            createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at),
+            part:Number(row.part)
+          }))};
+      },
+      async upsertRagSource(item:SourceDoc,scanToken:string):Promise<{changed:boolean}> {
+        const checksum=sha(item.title+'\n'+item.content);
+        const result=await sql`INSERT INTO tsukirei_rag_index
+          (source_key,kind,source_id,title,content,part,checksum,scan_token)
+          VALUES (${item.key},${item.kind},${item.sourceId},
+            ${item.title},${item.content},${item.part??0},${checksum},${scanToken})
+          ON CONFLICT (source_key) DO UPDATE SET
+            kind=EXCLUDED.kind,source_id=EXCLUDED.source_id,
+            title=EXCLUDED.title,content=EXCLUDED.content,part=EXCLUDED.part,
+            checksum=EXCLUDED.checksum,embedding=NULL,embedding_model=NULL,
+            scan_token=EXCLUDED.scan_token,updated_at=now()
+          WHERE tsukirei_rag_index.checksum IS DISTINCT FROM EXCLUDED.checksum
+          RETURNING source_key`;
+        if(!result.length){
+          await sql`UPDATE tsukirei_rag_index SET scan_token=${scanToken}
+            WHERE source_key=${item.key}`;
+          return {changed:false};
+        }
+        await sql`DELETE FROM tsukirei_rag_graph WHERE source_key=${item.key}`;
+        for(const link of graphLinks(item.content)){
+          await sql`INSERT INTO tsukirei_rag_graph
+            (source_key,subject,relation,object,evidence)
+            VALUES (${item.key},${link.from},${link.relation},
+              ${link.to},${link.evidence}) ON CONFLICT DO NOTHING`;
+        }
+        return {changed:true};
+      },
+      async finishRagScan(token:string) {
+        const rows=await sql`DELETE FROM tsukirei_rag_index WHERE scan_token <> ${token}
+          RETURNING source_key`;
+        return rows.length;
+      },
+      async ragIndexSearch(query:string,limit=65):Promise<RagSource[]> {
+        const terms=keywords(query,16).slice(0,10);
+        if(!terms.length)return [];
+        const tsquery=[...new Set(terms)].map(t=>t+':*').join(' | ');
+        const rows=await sql`SELECT kind,source_id,title,content,part,updated_at,
+            ts_rank_cd(to_tsvector('simple',title || ' ' || content),
+              to_tsquery('simple',${tsquery})) AS relevance
+          FROM tsukirei_rag_index
+          WHERE to_tsvector('simple',title || ' ' || content) @@ to_tsquery('simple',${tsquery})
+          ORDER BY relevance DESC,updated_at DESC LIMIT ${limit}`;
+        return rows.map(row=>({
+          kind:row.kind,id:String(row.source_id),title:String(row.title),
+          content:String(row.content),part:Number(row.part),
+          createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
+        })) as RagSource[];
+      },
+      async ragIndexVector(vector:number[],model:string,limit=35):Promise<RagSource[]> {
+        const repr='['+vector.join(',')+']';
+        const rows=await sql`SELECT kind,source_id,title,content,part,updated_at
+          FROM tsukirei_rag_index
+          WHERE embedding IS NOT NULL AND embedding_model=${model}
+            AND vector_dims(embedding)=${vector.length}
+          ORDER BY embedding <=> ${repr}::vector LIMIT ${limit}`;
+        return rows.map(row=>({
+          kind:row.kind,id:String(row.source_id),title:String(row.title),
+          content:String(row.content),part:Number(row.part),
+          createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
+        })) as RagSource[];
+      },
+      async ragSaveVector(key:string,checksum:string,model:string,embedding:number[]) {
+        const repr='['+embedding.join(',')+']';
+        const rows=await sql`UPDATE tsukirei_rag_index
+          SET embedding=${repr}::vector,embedding_model=${model}
+          WHERE source_key=${key} AND checksum=${checksum}
+          RETURNING source_key`;
+        return Boolean(rows.length);
+      },
+      async ragInspect(limit=1000):Promise<SourceDoc[]>{
+        const rows=await sql`SELECT source_key,kind,source_id,title,content,part,updated_at
+          FROM tsukirei_rag_index ORDER BY updated_at DESC LIMIT ${limit}`;
+        return rows.map(row=>({
+          key:String(row.source_key),kind:row.kind,sourceId:String(row.source_id),
+          title:String(row.title),content:String(row.content),part:Number(row.part),
+          createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
+        })) as SourceDoc[];
+      },
+      async ragGraph(term:string,limit=60) {
+        const q='%'+term.trim().toLowerCase().slice(0,65)+'%';
+        const rows=await sql`SELECT source_key,subject,relation,object,evidence
+          FROM tsukirei_rag_graph
+          WHERE subject ILIKE ${q} OR object ILIKE ${q}
+          ORDER BY subject,object LIMIT ${limit}`;
+        return rows.map(row=>({...row}));
+      },
+      async ragIndexStats(){
+        const count=await sql`SELECT count(*)::integer AS total FROM tsukirei_rag_index`;
+        const graph=await sql`SELECT count(*)::integer AS total FROM tsukirei_rag_graph`;
+        return {records:Number(count[0].total),relations:Number(graph[0].total)};
       },
       async close() { await sql.end({ timeout: 3 }); }
     };
