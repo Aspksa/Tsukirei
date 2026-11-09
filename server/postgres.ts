@@ -322,6 +322,13 @@ export async function connectPostgres(dataDir: string) {
           createdAt:row.updated_at instanceof Date?row.updated_at.toISOString():String(row.updated_at)
         })) as RagSource[];
       },
+      async ragVectorCount(model:string) {
+        const index=await sql`SELECT count(*)::integer AS total FROM tsukirei_rag_index
+          WHERE embedding IS NOT NULL AND embedding_model=${model}`;
+        const knowledge=await sql`SELECT count(*)::integer AS total FROM tsukirei_knowledge
+          WHERE embedding IS NOT NULL AND embedding_model=${model}`;
+        return Number(index[0].total)+Number(knowledge[0].total);
+      },
       async ragIndexVector(vector:number[],model:string,limit=35):Promise<RagSource[]> {
         const repr='['+vector.join(',')+']';
         const rows=await sql`SELECT kind,source_id,title,content,part,updated_at
