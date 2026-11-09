@@ -209,6 +209,18 @@ async function cloudModels() {
     .map(item => item.id).filter((id): id is string => typeof id === 'string')
     .slice(0, 300);
 }
+type MonitorStep={id:number;at:string;stage:string;target:string;status:'ok'|'error';durationMs:number};
+const monitorSteps:MonitorStep[]=[];
+let monitorStepSequence=0;
+function monitorRecord(stage:string,target:string,status:'ok'|'error',started:number){
+ monitorSteps.push({id:++monitorStepSequence,at:new Date().toISOString(),stage,target,status,durationMs:Math.max(0,Math.round(performance.now()-started))});
+ if(monitorSteps.length>60)monitorSteps.splice(0,monitorSteps.length-60);
+}
+async function monitorStage<T>(stage:string,target:string,operation:()=>Promise<T>):Promise<T>{
+ const started=performance.now();
+ try{const result=await operation();monitorRecord(stage,target,'ok',started);return result;}
+ catch(error){monitorRecord(stage,target,'error',started);throw error;}
+}
 async function chat(prompt: string, useMemory = true) {
   if (cloudBusy) throw new HttpError(429, 'Предыдущий запрос ещё выполняется');
   const cloud = readCloud();
@@ -216,9 +228,9 @@ async function chat(prompt: string, useMemory = true) {
   cloudBusy = true;
   try {
     living.touch();
-    const state = await readState();
+    const state = await monitorStage('Чтение истории','readState() → PostgreSQL или локальный JSON',()=>readState());
     const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
-    const retrieved = useMemory ? await askRag(prompt,5)
+    const retrieved = useMemory ? await monitorStage('Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5))
       : {hits:[],mode:'lexical',cached:false};
     const grounded = useMemory ? smartContext(prompt,retrieved.hits) : {hits:[],context:'',budget:0};
     const context=grounded.context;
@@ -243,12 +255,12 @@ async function chat(prompt: string, useMemory = true) {
       ...recent,
       {role:'user',content:prompt}
     ];
-    const reply = await fetch(endpoint + '/chat/completions', {
+    const reply = await monitorStage('Ответ модели','Cloud.ru /chat/completions',()=>fetch(endpoint + '/chat/completions', {
       method:'POST',
       headers:{Authorization:'Bearer '+cloud.apiKey,'Content-Type':'application/json'},
       body:JSON.stringify({model:cloud.model,messages,max_tokens:1200,stream:false}),
       signal:AbortSignal.timeout(90000)
-    });
+    }));
     if (!reply.ok) throw new HttpError(502,'Cloud.ru вернул HTTP '+reply.status+'. Проверьте ключ и модель.');
     const output = await reply.json() as {choices?:Array<{message?:{content?:unknown}}>;usage?:unknown};
     const answer=output.choices?.[0]?.message?.content;
@@ -292,6 +304,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const state = await readState();
     json(res, 200, { ...state, messages: state.messages.slice(-250), settings: settingsPublic(), agents: [],
       database: { engine: database ? 'PostgreSQL + pgvector' : 'JSON (legacy)', connected: Boolean(database) } }); return;
+  }
+  if (method === 'GET' && pathname === '/api/monitor/steps') {
+    json(res,200,{items:monitorSteps.slice(-60)});return;
   }
   if (method === 'GET' && pathname === '/api/brain/overview') {
     const [state] = await Promise.all([readState()]);
