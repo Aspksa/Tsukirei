@@ -72,6 +72,12 @@ jobs:
             $knowledge = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/knowledge' -Method Post -ContentType 'application/json' -Body '{"content":"PostgreSQL pgvector Windows portable test","embedding":[1,0,0],"embeddingModel":"smoke-test"}' -TimeoutSec 5
             $similar = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/knowledge/search' -Method Post -ContentType 'application/json' -Body '{"embedding":[1,0,0]}' -TimeoutSec 5
             if ($similar.items.Count -lt 1 -or $similar.items[0].id -ne $knowledge.knowledge.id) { throw 'pgvector search failed' }
+            $ragResult = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/rag/search' -Method Post -ContentType 'application/json' -Body '{"query":"Windows portable test"}' -TimeoutSec 10
+            if ($ragResult.items.Count -lt 1) { throw 'RAG knowledge retrieval failed' }
+            $ragDoc = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/rag/documents' -Method Post -ContentType 'application/json' -Body '{"title":"Portable guide","content":"Portable archive retrieval for Windows","source":"ci.txt"}' -TimeoutSec 10
+            if (-not $ragDoc.document.id) { throw 'RAG document import failed' }
+            $ragFound = Invoke-RestMethod -Uri 'http://127.0.0.1:39555/api/rag/search' -Method Post -ContentType 'application/json' -Body '{"query":"archive retrieval"}' -TimeoutSec 10
+            if (-not ($ragFound.items | Where-Object { $_.kind -eq 'document' -and $_.id -eq $ragDoc.document.id })) { throw 'RAG document search failed on Windows' }
             $config = Get-Content -LiteralPath (Join-Path $dir 'data/portable-postgres.json') -Raw | ConvertFrom-Json
             if (([IO.Path]::GetPathRoot($config.store)) -ne ([IO.Path]::GetPathRoot($dir))) { throw 'Database not stored on the same drive' }
             if ($config.store -notmatch '^[\x20-\x7E]+$') { throw 'Database physical path must be ASCII' }
