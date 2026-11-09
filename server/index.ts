@@ -437,6 +437,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/api/cognition/review-queue') {
     json(res,200,cognition.reviewQueue());return;
   }
+  if (method === 'GET' && pathname === '/api/cognition/review-evidence') {
+    json(res,200,{items:cognition.reviewEvidence(),localOnly:true,readOnly:true});return;
+  }
   if (method === 'GET' && pathname === '/api/cognition/consolidated') {
     json(res,200,{items:cognition.consolidatedKnowledge(),readOnly:true});return;
   }

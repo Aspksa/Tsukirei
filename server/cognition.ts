@@ -311,6 +311,16 @@ export class CognitiveCore{
     return {generatedAt:now.toISOString(),items:queue,requiresOwnerReview:true,
       automaticDeletion:false,automaticConfirmation:false};
   }
+  reviewEvidence(){
+    const queue=this.reviewQueue().items.filter(item=>item.kind!=='duplicate');
+    const confirmed=this.data.facts.filter(f=>f.status==='confirmed');
+    return queue.map(item=>{
+      const alternatives=confirmed.filter(f=>f.key===item.key&&!item.sourceIds.includes(f.sourceId))
+        .slice(0,8).map(f=>({factId:f.id,sourceId:f.sourceId,value:f.value,observedAt:f.observedAt}));
+      return {kind:item.kind,key:item.key,sourceIds:item.sourceIds,
+        candidates:alternatives,verified:false,requiresOwnerReview:true};
+    }).slice(0,100);
+  }
   consolidatedKnowledge(){
     const groups=new Map<string,Fact[]>();
     for(const fact of this.data.facts.filter(f=>f.status==='confirmed')){
