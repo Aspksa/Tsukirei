@@ -322,6 +322,7 @@ if ($diagnose) {
     Say "Приложение: $(if ($app) { $app } else { 'пока отсутствует (есть только BAT и README)' })"
     $node = Find-Node
     Say "Node.js 22.18+: $(if ($node) { $node } else { 'не найден; при запуске установится автоматически' })"
+    Say "npm CLI: $(if ($node) { $cli = Find-NpmCli $node; if ($cli) { $cli } else { 'не найден' } } else { 'проверка после установки Node.js' })"
     Say "Локальные файлы: $runtime; журналы: $logs"
     Say "PostgreSQL: $(if (Test-Path -LiteralPath (Join-Path $root 'data/portable-postgres.json')) { 'переносимый настроен' } elseif (Test-Path -LiteralPath (Join-Path $root 'data/postgres-settings.json')) { 'внешний сервер' } else { 'автоустановка при запуске' })"
     Say 'Диагностика завершена.'
