@@ -178,7 +178,7 @@ export async function connectPostgres(dataDir: string) {
         return rows.length>0;
       },
       async searchRagDocuments(query:string, limit=35):Promise<RagSource[]> {
-        const tokens = (query.toLowerCase().match(/[\\p{L}\\p{N}]{3,}/gu)||[]).slice(0,8);
+        const tokens = (query.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu)||[]).slice(0,8);
         if (!tokens.length) return [];
         const terms = [...new Set(tokens)].join(' | ');
         const rows=await sql`SELECT d.id,d.title,d.source,d.created_at,c.part,c.content
