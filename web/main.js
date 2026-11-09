@@ -2,6 +2,10 @@
 
 const pages = { brain: 'Мозг', home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', cognition: 'Мышление', supermind: 'Душа и сверхразум', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
+const advancedMount=document.getElementById('advanced-rag-mount');
+const technicalRagPanel=document.querySelector('.rag-engine-panel');
+if(advancedMount&&technicalRagPanel)advancedMount.append(technicalRagPanel);
+
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
 let toastTimer;
