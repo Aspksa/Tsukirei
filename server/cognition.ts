@@ -428,6 +428,7 @@ export class CognitiveCore{
       this.data.timeline=this.data.timeline.slice(0,900);
       this.trace('temporal','Обновлена хронология фактических событий',this.data.timeline.length);
       const edges:WorldEdge[]=[],nodes=new Map<string,WorldNode>();
+      const edgeKeys=new Set<string>();
       const addNode=(label:string,kind:WorldNode['kind'])=>{
         const key=(kind==='entity'?'entity:':kind+':')+label.toLowerCase();
         if(!nodes.has(key))nodes.set(key,{id:key,label:shorten(label,70),kind});
@@ -440,8 +441,8 @@ export class CognitiveCore{
         for(const relation of graphLinks(source.content.slice(0,7000))){
           const from=addNode(relation.from,'entity'),to=addNode(relation.to,'entity');
           const edge:WorldEdge={from,to,relation:relation.relation,evidenceId:source.id,excerpt:relation.evidence};
-          if(!edges.some(e=>e.from===edge.from&&e.to===edge.to&&e.relation===edge.relation&&e.evidenceId===edge.evidenceId))
-            edges.push(edge);
+          const edgeKey=JSON.stringify([edge.from,edge.to,edge.relation,edge.evidenceId]);
+          if(!edgeKeys.has(edgeKey)){edgeKeys.add(edgeKey);edges.push(edge);}
           if(edges.length>=3000)break;
         }
         if(edges.length>=3000)break;
