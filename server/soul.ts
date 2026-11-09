@@ -34,7 +34,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
-  commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string}>;
+  commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string;linkedTaskId?:string}>;
   characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
   reflectionGoals?:{lastRunAt:string|null;history:Array<{at:string;goalId:string;title:string;reason:string;sourceIds:string[];state:'observing'|'needs-review'}>};
   outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
@@ -258,6 +258,36 @@ export class SoulEngine {
       if(detail)item.note=detail;
       this.journal('reflection','Обязательство: '+status+' — '+item.title.slice(0,120),evidence||item.sourceId);
       return {...item,evidenceIds:[...item.evidenceIds]};
+    });
+  }
+  linkCommitmentTask(id:string,taskId:string){
+    const task=bounded(taskId,90,'ID задачи');
+    if(!/^[A-Za-z0-9_.-]{1,90}$/u.test(task))throw new Error('Некорректный ID задачи');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
+      const item=(this.data.commitments??[]).find(x=>x.id===id);
+      if(!item)throw new Error('Обязательство не найдено');
+      if(item.status!=='accepted')throw new Error('Привязка доступна только для принятых обязательств');
+      if(item.linkedTaskId&&item.linkedTaskId!==task)throw new Error('Обязательство уже связано с другой задачей');
+      item.linkedTaskId=task;item.updatedAt=new Date().toISOString();
+      this.journal('reflection','Обязательство связано с задачей: '+item.title.slice(0,100),'task:'+task);
+      return {...item,evidenceIds:[...item.evidenceIds]};
+    });
+  }
+  async reconcileCompletedTask(taskId:string){
+    const task=bounded(taskId,90,'ID задачи');
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext)return {completed:0,reason:'Персональный контекст отключён'};
+      let completed=0;
+      for(const item of this.data.commitments??[]){
+        if(item.status!=='accepted'||item.linkedTaskId!==task)continue;
+        item.status='completed';item.updatedAt=new Date().toISOString();
+        const source='task:'+task;
+        if(!item.evidenceIds.includes(source))item.evidenceIds.push(source);
+        this.journal('reflection','Выполнение обязательства подтверждено задачей: '+item.title.slice(0,100),source);
+        completed++;
+      }
+      return {completed};
     });
   }
   characterEvolutionReport(){
