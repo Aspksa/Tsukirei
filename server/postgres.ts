@@ -1,7 +1,8 @@
 import postgres from 'postgres';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { chunkText, keywords, type RagSource } from './rag.ts';
 
 export type Note = { id: string; title: string; body: string; createdAt: string };
 export type Task = { id: string; title: string; done: boolean; createdAt: string };
@@ -62,6 +63,22 @@ export async function connectPostgres(dataDir: string) {
       metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
       created_at timestamptz NOT NULL DEFAULT now()
     )`;
+    await sql`CREATE TABLE IF NOT EXISTS tsukirei_rag_documents (
+      id uuid PRIMARY KEY,
+      title text NOT NULL,
+      source text NOT NULL,
+      checksum text NOT NULL UNIQUE,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS tsukirei_rag_chunks (
+      document_id uuid NOT NULL REFERENCES tsukirei_rag_documents(id) ON DELETE CASCADE,
+      part integer NOT NULL CHECK (part >= 0),
+      content text NOT NULL,
+      searchable tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED,
+      PRIMARY KEY (document_id, part)
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS tsukirei_rag_chunks_text_idx
+      ON tsukirei_rag_chunks USING gin(searchable)`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_knowledge_text_idx ON tsukirei_knowledge
       USING gin (to_tsvector('simple', content))`;
     await sql`CREATE INDEX IF NOT EXISTS tsukirei_knowledge_vector_1024_idx ON tsukirei_knowledge
@@ -129,6 +146,54 @@ export async function connectPostgres(dataDir: string) {
           LIMIT ${limit}`;
         return rows.map(toKnowledge);
       },
+      async addRagDocument(title: string, content: string, source: string) {
+        const checksum = createHash('sha256').update(title).update('\n').update(content).digest('hex');
+        const parts = chunkText(content);
+        if (!parts.length) throw new Error('Документ пустой');
+        return sql.begin(async tx => {
+          const id = randomUUID();
+          const inserted = await tx`INSERT INTO tsukirei_rag_documents (id,title,source,checksum)
+            VALUES (${id},${title},${source},${checksum})
+            ON CONFLICT (checksum) DO NOTHING RETURNING id,title,source,created_at`;
+          if (!inserted.length) {
+            const existing=await tx`SELECT id,title,source,created_at FROM tsukirei_rag_documents WHERE checksum=${checksum}`;
+            if (!existing.length) throw new Error('Конфликт индекса документов');
+            return { document: toRagMeta(existing[0]), duplicate: true };
+          }
+          for(let i=0;i<parts.length;i++){
+            await tx`INSERT INTO tsukirei_rag_chunks (document_id,part,content)
+              VALUES (${id},${i},${parts[i]})`;
+          }
+          return { document: toRagMeta(inserted[0]), duplicate: false };
+        });
+      },
+      async listRagDocuments(limit=100) {
+        const rows=await sql`SELECT d.id,d.title,d.source,d.created_at,
+          (SELECT count(*)::integer FROM tsukirei_rag_chunks c WHERE c.document_id=d.id) AS parts
+          FROM tsukirei_rag_documents d ORDER BY d.created_at DESC LIMIT ${limit}`;
+        return rows.map(row=>({...toRagMeta(row),parts:Number(row.parts)}));
+      },
+      async deleteRagDocument(id:string) {
+        const rows=await sql`DELETE FROM tsukirei_rag_documents WHERE id=${id}::uuid RETURNING id`;
+        return rows.length>0;
+      },
+      async searchRagDocuments(query:string, limit=35):Promise<RagSource[]> {
+        const tokens = (query.toLowerCase().match(/[\\p{L}\\p{N}]{3,}/gu)||[]).slice(0,8);
+        if (!tokens.length) return [];
+        const terms = [...new Set(tokens)].join(' | ');
+        const rows=await sql`SELECT d.id,d.title,d.source,d.created_at,c.part,c.content
+          FROM tsukirei_rag_chunks c JOIN tsukirei_rag_documents d ON d.id=c.document_id
+          WHERE c.searchable @@ to_tsquery('simple', ${terms})
+            OR d.title ILIKE ${'%' + query.slice(0,110) + '%'}
+          ORDER BY ts_rank_cd(c.searchable,to_tsquery('simple', ${terms})) DESC,
+            d.created_at DESC
+          LIMIT ${limit}`;
+        return rows.map(row=>({
+          kind:'document',id:String(row.id),title:String(row.title),content:String(row.content),
+          source:String(row.source),part:Number(row.part),
+          createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at)
+        }));
+      },
       async close() { await sql.end({ timeout: 3 }); }
     };
   } catch (error) {
@@ -145,4 +210,9 @@ function toKnowledge(row: Record<string, any>): Knowledge {
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     ...(row.distance == null ? {} : { distance: Number(row.distance) })
   };
+}
+
+function toRagMeta(row: Record<string, any>) {
+  return { id:String(row.id), title:String(row.title), source:String(row.source),
+    createdAt:row.created_at instanceof Date?row.created_at.toISOString():String(row.created_at) };
 }
