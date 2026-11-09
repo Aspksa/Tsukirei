@@ -28,7 +28,11 @@ export class RagWorker {
   private error:string|null=null;
   private indexingStage='Ожидание';
   private revision=0;
-  constructor(private db:RagDatabase,private provider:RagProvider,private invalidated:()=>void){
+  private db:RagDatabase;
+  private provider:RagProvider;
+  private invalidated:()=>void;
+  constructor(db:RagDatabase,provider:RagProvider,invalidated:()=>void){
+    this.db=db;this.provider=provider;this.invalidated=invalidated;
     this.schedule();
     this.periodic=setInterval(()=>this.schedule(),5*60*1000);
     this.periodic.unref?.();
