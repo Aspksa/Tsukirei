@@ -922,14 +922,26 @@ function renderMonitorTraceGraph(items){
   section.append(track);graph.append(section);
  }
 }
+function filteredMonitorSteps(){
+ const selected=el('monitor-trace-select').value;
+ const filter=el('monitor-stage-filter').value;
+ return monitorServerStepCache.filter(item=>{
+  if(selected!=='all'&&item.traceId!==selected)return false;
+  if(filter==='errors')return item.status==='error';
+  if(filter==='slow')return Number(item.durationMs)>500;
+  if(filter==='rag')return /памят|поиск|ранжирован|векторизац|кэш/i.test(String(item.stage||''));
+  if(filter==='storage')return /Чтение истории|Чтение для поиска|Сохранение переписки/.test(String(item.stage||''));
+  return true;
+ });
+}
 function renderMonitorServerSteps(){
- const list=el('monitor-server-steps'),selected=el('monitor-trace-select').value;
- const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
+ const list=el('monitor-server-steps');
+ const items=filteredMonitorSteps();
  renderMonitorTraceGraph(items);
  renderMonitorWaterfall(items);
  list.replaceChildren();
- el('monitor-trace-count').textContent=items.length+' этапов';
- if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Нет этапов для выбранной цепочки. Отправьте сообщение и обновите.';list.append(empty);return;}
+ el('monitor-trace-count').textContent=items.length+' из '+monitorServerStepCache.length+' этапов';
+ if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Нет этапов для выбранных фильтров. Измените фильтр или обновите данные.';list.append(empty);return;}
  for(const item of items){
   const row=document.createElement('div');row.className='monitor-server-step';
   const stage=document.createElement('strong');stage.textContent=String(item.stage||'Этап');
@@ -954,8 +966,7 @@ function monitorSafeReport(items){
 }
 el('monitor-report-copy').addEventListener('click',async()=>{
  const status=el('monitor-report-status');
- const selected=el('monitor-trace-select').value;
- const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
+ const items=filteredMonitorSteps();
  if(!items.length){status.textContent='Нет записей для копирования.';return;}
  try{
   await navigator.clipboard.writeText(monitorSafeReport(items));
@@ -965,6 +976,7 @@ el('monitor-report-copy').addEventListener('click',async()=>{
  }
 });
 el('monitor-trace-select').addEventListener('change',renderMonitorServerSteps);
+el('monitor-stage-filter').addEventListener('change',renderMonitorServerSteps);
 el('monitor-server-refresh').addEventListener('click',refreshMonitorServerSteps);
 el('monitor-filter').addEventListener('change',renderBrainRequestTrace);
 el('brain-trace-clear').addEventListener('click',()=>{brainRequestTrace.length=0;renderBrainRequestTrace();});
