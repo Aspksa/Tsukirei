@@ -97,7 +97,7 @@ test('Scientific investigation requires explicit test observation and owner appr
   principle:'Сначала проверять фактические результаты тестов'}),/успешным тестом/);
  const hypothesis=investigation.hypotheses[0];
  await assert.rejects(core.testHypothesis(investigation.id,hypothesis.id,{
-   result:'supports',note:'просто работает'}),/осмысленный/);
+   result:'supports',note:'не проверено'}),/осмысленный/);
  const response=await core.testHypothesis(investigation.id,hypothesis.id,{
   result:'supports',note:'На локальных примерах связь с набором данных воспроизведена'});
  assert.equal(response.outcome,'supports');
@@ -144,9 +144,9 @@ test('Counterfactual and multi-strategy scores use explicit user numbers, not in
  assert.equal(result.alternativeWinner,'Вариант локальный');
  assert.match(result.notes,/условный/);
  assert.equal(rankStrategies(options)[0].score,result.options[0].score);
- await assert.rejects(core.compareStrategies({question:'Как выбрать память для локального проекта?',
+ assert.throws(()=>core.compareStrategies({question:'Как выбрать память для локального проекта?',
   options:[{...options[0],risk:11},options[1]]}),/диапазон/);
- await assert.rejects(core.compareStrategies({question:'Как выбрать память для локального проекта?',options:[options[0]]}),/2–4/);
+ assert.throws(()=>core.compareStrategies({question:'Как выбрать память для локального проекта?',options:[options[0]]}),/2–4/);
 });
 test('Governor prevents unbounded deep review, preserves Soul identity and supports toggles',async t=>{
  const {core}=fixture(t);
