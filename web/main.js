@@ -137,6 +137,55 @@ async function refreshBrainOverview(){
   }finally{brainLoading=false;}
 }
 el('brain-refresh').addEventListener('click',()=>{void refreshBrainOverview();});
+async function refreshBrainKnowledge(){
+  const svg=el('brain-map-svg');
+  const detail=el('brain-graph-detail');
+  const query=el('brain-graph-query').value.trim().slice(0,70);
+  detail.textContent='Загружаю подтверждённые источниками связи...';
+  try{
+    const graph=await api('/api/cognition/world'+(query?'?q='+encodeURIComponent(query):''));
+    const allNodes=Array.isArray(graph.nodes)?graph.nodes.slice(0,70):[];
+    const allEdges=Array.isArray(graph.edges)?graph.edges.slice(0,140):[];
+    const nodes=allNodes.map((node,i)=>({
+      id:String(node.id),label:String(node.label||node.id).slice(0,90),
+      x:350+Math.cos(i*2.399963)*Math.sqrt((i+.5)/Math.max(allNodes.length,1))*295,
+      y:170+Math.sin(i*2.399963)*Math.sqrt((i+.5)/Math.max(allNodes.length,1))*140
+    }));
+    const byId=new Map(nodes.map(node=>[node.id,node]));
+    svg.setAttribute('viewBox','0 0 700 340');
+    svg.replaceChildren();
+    const ns='http://www.w3.org/2000/svg';
+    const make=(tag,attrs,parent=svg)=>{
+      const element=document.createElementNS(ns,tag);
+      for(const [key,value] of Object.entries(attrs))element.setAttribute(key,String(value));
+      parent.append(element);return element;
+    };
+    for(const edge of allEdges){
+      const a=byId.get(String(edge.from)),b=byId.get(String(edge.to));
+      if(a&&b)make('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'#a68b58','stroke-opacity':'.5','stroke-width':1.3});
+    }
+    for(const node of nodes){
+      const group=make('g',{tabindex:0,role:'button','aria-label':node.label});
+      make('circle',{cx:node.x,cy:node.y,r:8,fill:'#d6ad63',stroke:'#f3d99b','stroke-width':1.2},group);
+      const label=make('text',{x:node.x,y:node.y+21,'text-anchor':'middle',fill:'#e9dfca','font-size':10},group);
+      label.textContent=node.label.slice(0,19);
+      const inspect=()=>{
+        const connected=allEdges.filter(e=>String(e.from)===node.id||String(e.to)===node.id);
+        detail.textContent=node.label+' · Связей: '+connected.length+
+          (connected.length?' · '+connected.slice(0,5).map(e=>String(e.from)===node.id?String(e.to):String(e.from)).join(', '):'');
+      };
+      group.addEventListener('click',inspect);
+      group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();inspect();}});
+    }
+    detail.textContent=nodes.length?'Реальный граф: '+nodes.length+' узлов, '+allEdges.length+' связей. Выбери узел.':
+      'Связи пока не извлечены. Добавь документы и запусти проверку знаний.';
+    el('brain-footnote').textContent='Граф строится из локально сохранённых связей Cognitive Core. Cloud.ru не вызывается.';
+  }catch(error){detail.textContent='Не удалось загрузить граф: '+(error.message||'ошибка');}
+}
+el('brain-graph-search').addEventListener('click',()=>{void refreshBrainKnowledge();});
+el('brain-graph-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void refreshBrainKnowledge();}});
+el('brain-graph-overview').addEventListener('click',()=>{el('brain-map-svg').setAttribute('viewBox','0 0 700 230');void refreshBrainOverview();});
+
 function renderStatus() {
   const settings = viewState.settings;
   el('status-text').textContent = settings.configured ? 'Cloud.ru настроен' : 'Локальная система';
