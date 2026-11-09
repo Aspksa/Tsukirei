@@ -98,7 +98,8 @@ async function mutateState<T>(change: (state: State) => T): Promise<T> {
 const living=new LivingCore(dataDir,{
   read:readState,soul:()=>soul.overview(),
   cloud:()=>({...readCloud(),endpoint}),
-  busy:()=>cloudBusy
+  busy:()=>cloudBusy,
+  indexed:async()=>database?database.ragInspect(12):[]
 });
 function readCloud(): CloudSettings {
   if (!existsSync(cloudPath)) return { apiKey: '', model: '' };
