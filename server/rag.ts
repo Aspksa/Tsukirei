@@ -30,10 +30,10 @@ function stem(word: string) {
   }
   return word;
 }
-export function keywords(text: string): string[] {
+export function keywords(text: string, maxTerms = 24): string[] {
   const raw = String(text).normalize('NFKC').toLowerCase()
     .match(/[\p{L}\p{N}]{3,}/gu) ?? [];
-  return [...new Set(raw.filter(x => !RU_STOP.has(x)).map(stem))].slice(0,24);
+  return [...new Set(raw.filter(x => !RU_STOP.has(x)).map(stem))].slice(0,Math.min(1200,Math.max(1,maxTerms)));
 }
 export function chunkText(text: string, maxChars = 1250, overlap = 150): string[] {
   const cleaned = String(text).replace(/\r\n?/g,'\n').replace(/\0/g,'').trim();
@@ -61,7 +61,7 @@ export function chunkText(text: string, maxChars = 1250, overlap = 150): string[
   return parts;
 }
 function matches(needles: string[], text: string) {
-  const words = new Set(keywords(text.slice(0,120000)));
+  const words = new Set(keywords(text.slice(0,120000), 800));
   let found = 0;
   for (const word of needles) {
     if (words.has(word)) found++;
