@@ -264,6 +264,19 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }catch(error){throw new HttpError(400,error instanceof Error?error.message:'Предпочтение не найдено');}
     json(res,200,{ok:true});return;
   }
+  if (method === 'DELETE' && pathname.startsWith('/api/soul/lessons/')) {
+    const id=pathname.slice('/api/soul/lessons/'.length);
+    if(!validId(id))throw new HttpError(400,'Некорректный идентификатор');
+    try {await soul.deleteLesson(id);}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Урок не найден');}
+    json(res,200,{ok:true});return;
+  }
+  if (method === 'POST' && pathname === '/api/soul/reset') {
+    const input=await bodyJson(req);
+    if(input.confirm!=='RESET_SOUL')throw new HttpError(400,'Требуется подтверждение RESET_SOUL');
+    await soul.reset(input.confirm);
+    json(res,200,{ok:true,soul:soul.overview()});return;
+  }
   if (method === 'POST' && pathname === '/api/soul/feedback') {
     const input=await bodyJson(req);
     const id=requiredText(input.messageId,'Сообщение',90);
