@@ -778,11 +778,20 @@ async function refreshMonitorServerSteps(){
   renderMonitorServerSteps();
 
  }catch(error){
+  monitorServerStepCache=[];
+  renderMonitorServerSteps();
   list.replaceChildren();
   const message=document.createElement('p');message.className='brain-trace-empty';
   message.textContent='Не удалось получить этапы сервера: '+(error.message||'ошибка');
   list.append(message);
  }
+}
+function monitorStageSource(stage){
+ if(stage==='Обработка опыта')return 'server/soul.ts';
+ if(stage==='Поиск памяти')return 'server/index.ts · askRag()';
+ if(stage==='Чтение истории'||stage==='Сохранение переписки')return 'server/index.ts · хранилище состояния';
+ if(stage==='Ответ модели')return 'server/index.ts · Cloud.ru API';
+ return 'server/index.ts · обработчик';
 }
 function renderMonitorTraceGraph(items){
  const graph=el('monitor-trace-graph'),detail=el('monitor-graph-detail');
@@ -814,7 +823,16 @@ function renderMonitorTraceGraph(items){
    button.addEventListener('click',()=>{
     graph.querySelectorAll('.monitor-graph-node').forEach(node=>node.setAttribute('aria-pressed','false'));
     button.setAttribute('aria-pressed','true');
-    detail.textContent=String(item.stage||'Этап')+' · '+String(item.target||'')+' · '+String(item.durationMs)+' мс · '+(item.status==='ok'?'Успешно':'Ошибка')+' · '+new Date(item.at).toLocaleString('ru-RU');
+    detail.replaceChildren();
+    const line=document.createElement('p');
+    line.textContent=String(item.stage||'Этап')+' · '+String(item.target||'')+' · '+String(item.durationMs)+' мс · '+(item.status==='ok'?'Успешно':'Ошибка')+' · '+new Date(item.at).toLocaleString('ru-RU');
+    const source=document.createElement('p');
+    source.textContent='Связанный исходный код: '+monitorStageSource(String(item.stage||''));
+    const link=document.createElement('a');
+    link.href='https://github.com/Aspksa/Tsukirei/blob/main/'+(item.stage==='Обработка опыта'?'server/soul.ts':'server/index.ts');
+    link.target='_blank';link.rel='noopener noreferrer';
+    link.textContent='Открыть исходный файл';
+    detail.append(line,source,link);
    });
    button.setAttribute('aria-pressed','false');
    track.append(button);
