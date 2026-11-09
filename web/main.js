@@ -1,6 +1,6 @@
 'use strict';
 
-const pages = { brain: 'Мозг', home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', cognition: 'Мышление', supermind: 'Душа и сверхразум', settings: 'Настройки' };
+const pages = { brain: 'Мозг', monitor: 'Монитор', home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', cognition: 'Мышление', supermind: 'Душа и сверхразум', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const advancedMount=document.getElementById('advanced-rag-mount');
 const technicalRagPanel=document.querySelector('.rag-engine-panel');
@@ -67,7 +67,7 @@ function renderBrainRequestTrace(){
  list.replaceChildren();
  if(!brainRequestTrace.length){
   const empty=document.createElement('p');empty.className='brain-trace-empty';
-  empty.textContent='Запросов пока нет. Откройте раздел или обновите карту мозга.';
+  empty.textContent='Запросов пока нет. Перейдите в другой раздел или обновите карту мозга.';
   list.append(empty);return;
  }
  for(const entry of brainRequestTrace){
