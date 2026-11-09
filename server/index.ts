@@ -5,6 +5,9 @@ import { randomUUID } from 'node:crypto';
 import { connectPostgres, emptyState, validateState, type Note, type Task, type State } from './postgres.ts';
 import { retrieveRag } from './rag-engine.ts';
 import { groundedContext, publicSources } from './rag.ts';
+import { RagCache, sha, rerankLocal, smartContext } from './rag-advanced.ts';
+import { RagProvider } from './rag-provider.ts';
+import { RagWorker } from './rag-worker.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -17,6 +20,48 @@ const endpoint = process.env.TSUKIREI_CLOUD_ENDPOINT || 'https://foundation-mode
 const port = Number(process.env.PORT ?? 3000);
 let cloudBusy = false;
 const database = await connectPostgres(dataDir);
+const ragProvider = new RagProvider(dataDir);
+const ragCache = new RagCache<{hits:Awaited<ReturnType<typeof retrieveRag>>['hits'];mode:string}>(128,90_000);
+const ragWorker = database ? new RagWorker(database,ragProvider,()=>ragCache.clear()) : null;
+function queueRagIndex(){
+  ragCache.clear();
+  ragWorker?.schedule();
+}
+async function askRag(query:string,limit:number,embedding?:number[]){
+  const indexed=Boolean(ragWorker?.status().lastRun);
+  const identifier=sha(JSON.stringify({query,limit,indexed,revision:ragWorker?.generation,
+    configured:ragProvider.public().embeddingsEnabled,
+    optionalVector:embedding||null}));
+  const found=ragCache.get(identifier);
+  if(found)return {...found,cached:true};
+  let vector=embedding;
+  let model:string|undefined;
+  if(!vector&&ragProvider.public().embeddingsEnabled){
+    try{
+      const generated=await ragProvider.embed(query);
+      if(generated){vector=generated.vector;model=generated.model;}
+    }catch(error){
+      console.warn('[RAG] Embedding недоступен; использую локальный поиск:',
+        error instanceof Error?error.message:String(error));
+    }
+  }
+  const state=indexed?emptyState():await readState();
+  const retrieved=await retrieveRag(query,state,database,Math.max(limit,12),vector,model,indexed);
+  let ordered=rerankLocal(query,retrieved.hits,limit);
+  if(ordered.length>=2&&ragProvider.public().rerankEnabled){
+    try{
+      const scores=await ragProvider.rerank(query,ordered.map(item=>item.title+'\n'+item.content));
+      if(scores)ordered=ordered.map((hit,i)=>({hit,i,score:scores[i]}))
+        .sort((a,b)=>b.score-a.score||a.i-b.i).map(row=>row.hit);
+    }catch(error){
+      console.warn('[RAG] Внешний reranker недоступен, использую локальный:',
+        error instanceof Error?error.message:String(error));
+    }
+  }
+  const result={hits:ordered.slice(0,limit),mode:vector?'hybrid':'lexical'};
+  ragCache.set(identifier,result);
+  return {...result,cached:false};
+}
 class HttpError extends Error {
   status: number;
   constructor(status: number, message: string) { super(message); this.status = status; }
@@ -31,11 +76,12 @@ async function readState(): Promise<State> {
 // Serialise legacy writes; PostgreSQL uses SELECT ... FOR UPDATE inside a transaction.
 let legacyQueue: Promise<unknown> = Promise.resolve();
 async function mutateState<T>(change: (state: State) => T): Promise<T> {
-  if (database) return database.mutate(change);
+  if (database) { const result = await database.mutate(change); queueRagIndex(); return result; }
   const pending = legacyQueue.then(() => {
     const state = readLegacyState();
     const result = change(state);
     saveAtomic(statePath, state);
+    queueRagIndex();
     return result;
   });
   legacyQueue = pending.catch(() => {});
@@ -117,9 +163,10 @@ async function chat(prompt: string, useMemory = true) {
   try {
     const state = await readState();
     const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
-    const retrieved = useMemory ? await retrieveRag(prompt,state,database,5)
-      : {hits:[],mode:'lexical' as const};
-    const context = useMemory ? groundedContext(retrieved.hits,4200) : '';
+    const retrieved = useMemory ? await askRag(prompt,5)
+      : {hits:[],mode:'lexical',cached:false};
+    const grounded = useMemory ? smartContext(prompt,retrieved.hits) : {hits:[],context:'',budget:0};
+    const context=grounded.context;
     const messages = [
       {role:'system',content:'Ты Цукирэй, полезная персональная ИИ-помощница. Отвечай по-русски. '+
         'Не выдумывай выполненные действия и сведения из памяти. '+
@@ -151,8 +198,9 @@ async function chat(prompt: string, useMemory = true) {
     });
     return {
       answer:answer.trim(),messages:archive,
-      sources:publicSources(retrieved.hits),
-      rag:{enabled:useMemory,mode:retrieved.mode,sourceCount:retrieved.hits.length}
+      sources:publicSources(grounded.hits),
+      rag:{enabled:useMemory,mode:retrieved.mode,sourceCount:grounded.hits.length,
+        cacheHit:retrieved.cached,contextChars:context.length}
     };
   } finally {cloudBusy=false;}
 }
@@ -164,7 +212,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = req.headers.origin;
   if (origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(origin)) throw new HttpError(403, 'Запрещён межсайтовый запрос');
   if (method === 'GET' && pathname === '/api/health') {
-    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.7.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
+    json(res, 200, { ok: true, name: 'Tsukirei', version: '0.8.0', local: true, storage: database ? 'postgresql+pgvector' : 'legacy-json' }); return;
   }
   if (method === 'GET' && pathname === '/api/state') {
     const state = await readState();
@@ -258,6 +306,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
     const model = embedding ? requiredText(input.embeddingModel, 'Модель эмбеддингов', 150) : undefined;
     const knowledge = await database.addKnowledge(content, source, metadata as Json, embedding, model);
+    queueRagIndex();
     json(res, 201, { knowledge }); return;
   }
   if (method === 'POST' && pathname === '/api/knowledge/search') {
@@ -277,13 +326,54 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const items = await database.searchKnowledge(query, embedding, limit as number);
     json(res, 200, { items }); return;
   }
+  if (method === 'GET' && pathname === '/api/rag/engine') {
+    json(res,200,{worker:ragWorker?.status()??{available:false},cache:ragCache.stats(),
+      provider:ragProvider.public(),index:database?await database.ragIndexStats():null});
+    return;
+  }
+  if (method === 'POST' && pathname === '/api/rag/engine/reindex') {
+    if(!ragWorker)throw new HttpError(409,'Фоновый индекс требует PostgreSQL');
+    await bodyJson(req);
+    json(res,202,{worker:await ragWorker.force()});return;
+  }
+  if (method === 'POST' && pathname === '/api/rag/engine/pause') {
+    if(!ragWorker)throw new HttpError(409,'Фоновый индекс требует PostgreSQL');
+    const input=await bodyJson(req);
+    if(typeof input.paused!=='boolean')throw new HttpError(400,'Требуется paused: boolean');
+    json(res,200,{worker:ragWorker.setPaused(input.paused)});return;
+  }
+  if (method === 'GET' && pathname === '/api/rag/provider') {
+    json(res,200,{settings:ragProvider.public()});return;
+  }
+  if (method === 'POST' && pathname === '/api/rag/provider') {
+    const input=await bodyJson(req);
+    let settings;
+    try {settings=ragProvider.update(input);}catch(error){
+      throw new HttpError(400,error instanceof Error?error.message:'Некорректные настройки RAG');
+    }
+    ragCache.clear();
+    if(settings.autoEmbed)ragWorker?.schedule();
+    json(res,200,{settings});return;
+  }
+  if (method === 'GET' && pathname === '/api/rag/curator') {
+    if(!ragWorker)throw new HttpError(409,'Анализ памяти требует PostgreSQL');
+    const findings=await ragWorker.curator();
+    json(res,200,{items:findings,total:findings.length,automaticDeletion:false});return;
+  }
+  if (method === 'GET' && pathname === '/api/rag/graph') {
+    if(!ragWorker)throw new HttpError(409,'Граф знаний требует PostgreSQL');
+    const query=new URL(req.url??'/','http://127.0.0.1').searchParams.get('q')||'';
+    if(query.length<2||query.length>65)throw new HttpError(400,'Требуется запрос от 2 до 65 символов');
+    json(res,200,{items:await ragWorker.graph(query),evidenceRequired:true});return;
+  }
   if (method === 'GET' && pathname === '/api/rag/status') {
     const documents=database?await database.listRagDocuments(100):[];
     json(res,200,{
-      enabled:true,engine:'local-lexical',pgvector:Boolean(database),
-      documentsSupported:Boolean(database),documents:documents.length,
-      cloudRequestsForRetrieval:0,
-      note:'Эмбеддинги не генерируются автоматически; поиск по векторам доступен при передаче вектора.'
+      enabled:true,engine:ragWorker?.status().lastRun?'postgres-indexed-hybrid':'local-lexical',
+      pgvector:Boolean(database),documentsSupported:Boolean(database),documents:documents.length,
+      cloudRequestsForRetrieval:0,worker:ragWorker?.status()??{available:false},
+      cache:ragCache.stats(),provider:ragProvider.public(),
+      note:'Фоновая текстовая индексация локальная. Внешние эмбеддинги и reranker выключены до явного включения.'
     });return;
   }
   if (method === 'GET' && pathname === '/api/rag/documents') {
@@ -297,6 +387,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const content=requiredText(input.content,'Текст документа',100000);
     const source=input.source===undefined?'user-import':requiredText(input.source,'Источник документа',180);
     const result=await database.addRagDocument(title,content,source);
+    if(!result.duplicate)queueRagIndex();
     json(res,result.duplicate?200:201,result);return;
   }
   if (method === 'DELETE' && pathname.startsWith('/api/rag/documents/')) {
@@ -305,6 +396,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if(!validId(id))throw new HttpError(400,'Неверный идентификатор документа');
     const removed=await database.deleteRagDocument(id);
     if(!removed)throw new HttpError(404,'Документ не найден');
+    queueRagIndex();
     json(res,200,{ok:true});return;
   }
   if (method === 'POST' && pathname === '/api/rag/search') {
@@ -321,8 +413,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         throw new HttpError(400,'Некорректный поисковый вектор');
       embedding=input.embedding as number[];
     }
-    const results=await retrieveRag(query,await readState(),database,limit as number,embedding);
-    json(res,200,{mode:results.mode,items:publicSources(results.hits),cloudRequests:0});return;
+    const before=ragProvider.public().requestsToday;
+    const results=await askRag(query,limit as number,embedding);
+    json(res,200,{mode:results.mode,items:publicSources(results.hits),
+      cloudRequests:Math.max(0,ragProvider.public().requestsToday-before),
+      cached:results.cached});return;
   }
   if (method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
     staticFile(res, join(root, 'web', 'index.html'), 'text/html; charset=utf-8'); return;
