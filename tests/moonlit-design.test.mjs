@@ -6,6 +6,7 @@ const web=join(import.meta.dirname,'../web');
 const app=readFileSync(join(web,'index.html'),'utf8');
 const css=readFileSync(join(web,'styles.css'),'utf8');
 const studio=readFileSync(join(web,'studio.html'),'utf8');
+const main=readFileSync(join(web,'main.js'),'utf8');
 test('Moonlit Sanctuary tokens are consistent between app and studio',()=>{
  for(const token of ['--bg:#0b0b13','--panel:#15141f','--panel2:#1e1b2b','--gold:#e6bf78','--text:#f4eff8','--muted:#b8b0c4']){
   assert.ok(css.includes(token),'app '+token);
@@ -45,4 +46,16 @@ test('Moonlit Sanctuary III protects narrow viewports and dialogs',()=>{
  for(const rule of ['.nav{min-width:0;max-width:calc(100vw - 160px);overflow-x:auto','dialog{max-height:calc(100dvh - 30px);overflow-y:auto','@media(max-width:390px)']){
   assert.ok(studio.includes(rule),'studio '+rule);
  }
+});
+
+test('mobile navigation is accessible and dismissible',()=>{
+ assert.match(app,/id="app-sidebar" aria-label="Навигация"/);
+ assert.match(app,/id="mobile-menu"[^>]*aria-controls="app-sidebar" aria-expanded="false"/);
+ assert.match(main,/function setMobileMenu\(open\)/);
+ assert.match(main,/setAttribute\('aria-expanded',String\(open\)\)/);
+ assert.match(main,/event\.target\.closest\('#app-sidebar, #mobile-menu'\)/);
+ assert.match(main,/event\.key!=='Escape'/);
+ assert.match(main,/matchMedia\('\(min-width: 521px\)'\)/);
+ assert.match(css,/\.sidebar\{visibility:hidden;pointer-events:none/);
+ assert.match(css,/\.menu-open \.sidebar\{visibility:visible;pointer-events:auto/);
 });
