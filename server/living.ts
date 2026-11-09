@@ -13,7 +13,7 @@ type State={notes:Array<{id:string;title:string;body:string}>;tasks:Array<{id:st
 type Soul={metrics:{chatsObserved:number;negativeFeedback:number;completedTasks:number};initiatives:Array<{id:string;title:string;reason:string;topic:string}>;lessons:Array<{id:string;text:string}>};
 type Model={apiKey:string;model:string;endpoint:string};
 type Indexed={key:string;kind:string;title:string;content:string};
-export type Dependencies={read:()=>Promise<State>;soul:()=>Soul;cloud:()=>Model;busy:()=>boolean;indexed?:()=>Promise<Indexed[]>;fetcher?:typeof fetch;now?:()=>Date};
+export type Dependencies={read:()=>Promise<State>;soul:()=>Soul;cloud:()=>Model;busy:()=>boolean;indexed?:()=>Promise<Indexed[]>;cognitiveScan?:()=>Promise<unknown>;fetcher?:typeof fetch;now?:()=>Date};
 const defaults:Settings={enabled:true,cloudEnabled:false,shareRecentText:false,idleMinutes:10,intervalMinutes:30,maxCloudCallsPerDay:2};
 const kinds:Kind[]=['reflection','question','goal','skill','critique'];
 const unsafe=/ignore\s+(all|previous)|system\s*prompt|developer\s*message|jailbreak|api.?key|password|token|curl|powershell|exec|rm\s+-|секретн\w*\s+ключ|игнорируй\s+инструкции|выполни\s+команду/iu;
@@ -144,6 +144,12 @@ export class LivingCore{
    this.data.metrics.localRuns++;this.data.lastSummary='Заметок: '+state.notes.length+
      '; открытых задач: '+seen.stats.openTasks+'; уроков: '+soul.lessons.length+'; предложений: '+added+'.';
    this.event('dream',this.data.lastSummary);this.save();
+  }
+  // Cognitive consolidation shares this same local background cadence.
+  // A cognition error is logged independently and cannot erase RAG or Soul data.
+  if(this.deps.cognitiveScan){
+    try{await this.deps.cognitiveScan();}
+    catch(error){console.warn('[Living/Cognitive] ',error instanceof Error?error.message:String(error));}
   }
   return{state,soul,indexed};
  }
