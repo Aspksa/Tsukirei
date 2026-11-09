@@ -39,7 +39,9 @@ async function askRag(query:string,limit:number,embedding?:number[]){
   if(found)return {...found,cached:true};
   let vector=embedding;
   let model:string|undefined;
-  if(!vector&&ragProvider.public().embeddingsEnabled){
+  const canReuseVectors=Boolean(database&&ragProvider.public().embeddingsEnabled&&
+    await database.ragVectorCount(ragProvider.model)>0);
+  if(!vector&&canReuseVectors){
     try{
       const generated=await ragProvider.embed(query);
       if(generated){vector=generated.vector;model=generated.model;}
