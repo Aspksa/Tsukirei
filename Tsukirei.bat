@@ -62,6 +62,26 @@ function Find-Node {
     if ($cmd -and (Check-Node $cmd.Source)) { return $cmd.Source }
     return $null
 }
+function Find-NpmCli([string]$nodeExe) {
+    $nodeDir = Split-Path -Parent $nodeExe
+    $candidates = New-Object System.Collections.Generic.List[string]
+    $candidates.Add((Join-Path $nodeDir 'node_modules\npm\bin\npm-cli.js'))
+    $npmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if ($npmCommand -and $npmCommand.Source) {
+        $npmDir = Split-Path -Parent $npmCommand.Source
+        $candidates.Add((Join-Path $npmDir 'node_modules\npm\bin\npm-cli.js'))
+        $candidates.Add((Join-Path $npmDir '..\node_modules\npm\bin\npm-cli.js'))
+    }
+    if ($env:APPDATA) {
+        $candidates.Add((Join-Path $env:APPDATA 'npm\node_modules\npm\bin\npm-cli.js'))
+    }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return [IO.Path]::GetFullPath($candidate)
+        }
+    }
+    return $null
+}
 function Install-Node {
     Say 'Node.js 22.18+ не найден. Устанавливаю переносимый Node.js LTS без прав администратора...'
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -330,10 +350,12 @@ try {
     $node = Find-Node
     if (-not $node) { $node = Install-Node }
     $env:PATH = (Split-Path -Parent $node) + ';' + $env:PATH
-    $npmCli = Join-Path (Split-Path -Parent $node) 'node_modules\npm\bin\npm-cli.js'
-    if (-not (Test-Path -LiteralPath $npmCli -PathType Leaf)) {
-        throw "Рядом с Node.js не найден npm CLI: $npmCli"
+    $npmCli = Find-NpmCli $node
+    if (-not $npmCli) {
+        throw 'npm CLI не найден. Проверьте установку Node.js и npm.cmd либо удалите повреждённую папку .runtime/node для повторной загрузки.'
     }
+    Say ('Node.js: ' + $node)
+    Say ('npm CLI: ' + $npmCli)
     $packageFile = Join-Path $app 'package.json'
     $package = Get-Content -LiteralPath $packageFile -Raw -Encoding UTF8 | ConvertFrom-Json
     $script = @('dev', 'start', 'preview') | Where-Object { $package.scripts -and $package.scripts.PSObject.Properties.Name -contains $_ } | Select-Object -First 1
