@@ -35,6 +35,7 @@ type SoulData = {
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
   commitments?:Array<{id:string;title:string;sourceId:string;createdAt:string;updatedAt:string;status:'proposed'|'accepted'|'completed'|'failed'|'cancelled';evidenceIds:string[];note:string;linkedTaskId?:string}>;
+  commitmentWatch?:{lastRunAt:string|null;items:Array<{id:string;commitmentId:string;createdAt:string;reason:string;status:'pending'|'dismissed';sourceId:string}>};
   characterEvolution?:{lastReviewedAt:string|null;history:Array<{at:string;strategy:string;status:'proposed'|'validated'|'insufficient-evidence';reason:string;sourceIds:string[];recentRate:number|null;previousRate:number|null}>};
   reflectionGoals?:{lastRunAt:string|null;history:Array<{at:string;goalId:string;title:string;reason:string;sourceIds:string[];state:'observing'|'needs-review'}>};
   outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
@@ -66,7 +67,7 @@ function empty():SoulData {
     preferences:[],lessons:[],journal:[],initiatives:[],
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
-    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],
+    growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],commitments:[],commitmentWatch:{lastRunAt:null,items:[]},
     characterEvolution:{lastReviewedAt:null,history:[]},
     outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
@@ -82,6 +83,7 @@ function validate(value:unknown):SoulData {
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
   if(!Array.isArray(state.commitments))state.commitments=[];
+  if(!state.commitmentWatch||!Array.isArray(state.commitmentWatch.items))state.commitmentWatch={lastRunAt:null,items:[]};
   if(!state.characterEvolution||!Array.isArray(state.characterEvolution.history))state.characterEvolution={lastReviewedAt:null,history:[]};
   if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
   if(!state.outreach||!Array.isArray(state.outreach.items))state.outreach={lastPreparedAt:null,items:[]};
@@ -199,6 +201,7 @@ export class SoulEngine {
         rememberedCorrections:lessons.map(l=>({text:l.text,sourceId:l.source})),
         milestones:autobiography.filter(e=>e.type==='task').slice(0,5)},
       commitments:{observedCompletedTasks:pendingPromises,ledger:enabled?(d.commitments??[]).slice(0,20):[],
+        watch:this.commitmentWatchReport().items,
         note:'Обязательства добавляются явно. Выполнение требует источника подтверждения, не выводится из текста ответа.'},
       interests:preferences.map(p=>p.text).slice(0,5),
       aspirations:goals.map(g=>({title:g.title,reason:g.reason,sourceIds:g.sourceIds})),
@@ -258,6 +261,47 @@ export class SoulEngine {
       if(detail)item.note=detail;
       this.journal('reflection','Обязательство: '+status+' — '+item.title.slice(0,120),evidence||item.sourceId);
       return {...item,evidenceIds:[...item.evidenceIds]};
+    });
+  }
+  commitmentWatchReport(){
+    if(!this.data.settings.personalContext||!this.data.settings.initiativeEnabled)
+      return {items:[],policy:'Персональный контекст или инициативы отключены'};
+    const commitments=new Map((this.data.commitments??[]).map(c=>[c.id,c]));
+    return {items:(this.data.commitmentWatch?.items??[]).filter(x=>x.status==='pending'&&
+      commitments.get(x.commitmentId)?.status==='accepted').slice(0,20),
+      policy:'Локальные напоминания о давно не обновлявшихся обязательствах. Без срока исполнения задержка не означает просрочку. Внешние сообщения не отправляются.'};
+  }
+  async reviewCommitments(now=new Date()){
+    return this.modify(()=>{
+      if(!this.data.settings.personalContext||!this.data.settings.initiativeEnabled)
+        return {created:0,reason:'Персональный контекст или инициативы отключены'};
+      const watch=this.data.commitmentWatch??{lastRunAt:null,items:[]};
+      const previous=Date.parse(watch.lastRunAt??'');
+      if(Number.isFinite(previous)&&now.getTime()-previous<24*86400000)
+        return {created:0,reason:'Проверка уже выполнена'};
+      let created=0;
+      for(const item of this.data.commitments??[]){
+        if(item.status!=='accepted')continue;
+        const age=now.getTime()-Date.parse(item.updatedAt);
+        if(!Number.isFinite(age)||age<7*86400000)continue;
+        const last=watch.items.find(x=>x.commitmentId===item.id);
+        if(last&&now.getTime()-Date.parse(last.createdAt)<14*86400000)continue;
+        watch.items.unshift({id:randomUUID(),commitmentId:item.id,createdAt:now.toISOString(),
+          reason:'Принятое обязательство не обновлялось более семи дней. Уточнить статус и следующий шаг; срок исполнения неизвестен.',
+          status:'pending',sourceId:item.sourceId});
+        created++;
+      }
+      watch.lastRunAt=now.toISOString();watch.items=watch.items.slice(0,100);
+      this.data.commitmentWatch=watch;
+      return {created};
+    });
+  }
+  dismissCommitmentWatch(id:string){
+    return this.modify(()=>{
+      const item=(this.data.commitmentWatch?.items??[]).find(x=>x.id===id);
+      if(!item)throw new Error('Напоминание не найдено');
+      item.status='dismissed';
+      return {dismissed:true};
     });
   }
   linkCommitmentTask(id:string,taskId:string){
