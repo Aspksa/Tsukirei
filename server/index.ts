@@ -483,6 +483,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя изменить идею');}
     return;
   }
+  if (method === 'GET' && pathname === '/api/soul/personality') {
+    json(res,200,soul.personalityProfile());return;
+  }
   if (method === 'GET' && pathname === '/api/soul') {
     json(res,200,soul.overview());return;
   }
