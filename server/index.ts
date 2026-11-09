@@ -228,7 +228,7 @@ async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
   cloudBusy = true;
   try {
     living.touch();
-    const state = await monitorStage(traceId,'Чтение истории','readState() → PostgreSQL или локальный JSON',()=>readState());
+    const state = await monitorStage(traceId,'Чтение истории',database ? 'database.read() → PostgreSQL' : 'readLegacyState() → локальный JSON',()=>readState());
     const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
     const retrieved = useMemory ? await monitorStage(traceId,'Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5))
       : {hits:[],mode:'lexical',cached:false};
@@ -268,7 +268,7 @@ async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
     const now=new Date().toISOString();
     const userId=randomUUID();
     const assistantId=randomUUID();
-    const archive=await monitorStage(traceId,'Сохранение переписки','mutateState() → PostgreSQL или локальный JSON',()=>mutateState(state=>{
+    const archive=await monitorStage(traceId,'Сохранение переписки',database ? 'database.mutate() → PostgreSQL' : 'saveAtomic() → локальный JSON',()=>mutateState(state=>{
       state.messages.push({id:userId,role:'user',content:prompt,createdAt:now});
       state.messages.push({id:assistantId,role:'assistant',content:answer.trim(),createdAt:now});
       if (!database) state.messages=state.messages.slice(-250);
