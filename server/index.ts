@@ -496,6 +496,19 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     catch(error){throw new HttpError(400,error instanceof Error?error.message:'Некорректное обязательство');}
     return;
   }
+  if (method === 'POST' && pathname.startsWith('/api/soul/commitments/') && pathname.endsWith('/link-task')) {
+    const id=pathname.slice('/api/soul/commitments/'.length,-'/link-task'.length);
+    if(!validId(id))throw new HttpError(400,'Некорректный идентификатор');
+    const input=await bodyJson(req);
+    const taskId=requiredText(input.taskId,'ID задачи',90);
+    const state=await readState();
+    const task=state.tasks.find(item=>item.id===taskId);
+    if(!task)throw new HttpError(404,'Задача не найдена');
+    if(task.done)throw new HttpError(400,'Нельзя привязать уже выполненную задачу');
+    try{json(res,200,{item:await soul.linkCommitmentTask(id,taskId)});}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Нельзя связать задачу');}
+    return;
+  }
   if (method === 'PATCH' && pathname.startsWith('/api/soul/commitments/')) {
     const id=pathname.slice('/api/soul/commitments/'.length);
     if(!validId(id))throw new HttpError(400,'Некорректный идентификатор');
@@ -660,7 +673,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       }
     });
     if(completedTask){
-      try {await soul.observeCompletedTask(completedTask.id,completedTask.title);}
+      try {await soul.observeCompletedTask(completedTask.id,completedTask.title);
+        await soul.reconcileCompletedTask(completedTask.id);}
       catch(error){console.warn('[Soul] Не удалось записать выполнение задачи:',error instanceof Error?error.message:String(error));}
     }
     json(res, 200, { ok: true }); return;
