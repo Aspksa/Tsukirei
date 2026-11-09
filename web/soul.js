@@ -3,6 +3,7 @@
   'use strict';
   const one=id=>document.getElementById(id);
   let loading=false;
+  let currentAddress='хозяин';
   function dom(tag,className,text){
     const n=document.createElement(tag);
     if(className)n.className=className;
@@ -41,6 +42,7 @@
   }
   function show(data){
     const s=data.settings,m=data.metrics;
+    currentAddress=s.address;
     one('soul-state').textContent='Локально · '+s.tone;
     one('soul-chat-count').textContent=String(m.chatsObserved);
     one('soul-preference-count').textContent=String(m.confirmedPreferences);
@@ -154,5 +156,12 @@
       notify(result.created?'Найдены предложения на основе повторений':'Новых повторяющихся проблем нет');
     });
   });
-  globalThis.TsukireiSoulUI=Object.freeze({refresh,feedback});
+  one('soul-reset').addEventListener('click',()=>run(async()=>{
+    const code=window.prompt('Это удалит предпочтения, уроки и дневник личности, но не чаты и документы. Для подтверждения введите RESET_SOUL:');
+    if(code!=='RESET_SOUL')return;
+    await api('/api/soul/reset',{method:'POST',body:{confirm:'RESET_SOUL'}});
+    await refresh();
+    notify('Память личности сброшена; другие данные не затронуты');
+  }));
+  globalThis.TsukireiSoulUI=Object.freeze({refresh,feedback,address:()=>currentAddress});
 })();

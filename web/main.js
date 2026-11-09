@@ -148,7 +148,7 @@ function renderChat() {
   list.replaceChildren();
   if (!viewState.messages.length) {
     const empty = escapeNotNeeded('div', 'chat-welcome');
-    empty.append(escapeNotNeeded('span', '', '✦'), escapeNotNeeded('strong', '', 'Цукирэй на связи, хозяин'),
+    empty.append(escapeNotNeeded('span', '', '✦'), escapeNotNeeded('strong', '', 'Цукирэй на связи, ' + (globalThis.TsukireiSoulUI?.address?.()||'хозяин')),
       escapeNotNeeded('p', '', 'Для ответа ИИ сохраните ключ и модель Cloud.ru в настройках.'));
     list.append(empty); return;
   }
@@ -488,6 +488,7 @@ function showFailedStart(message) {
 api('/api/state').then(data => {
   Object.assign(viewState, data);
   render();
+  globalThis.TsukireiSoulUI?.refresh();
   const page = window.location.hash.slice(1);
   go(pages[page] ? page : 'home');
 }).catch(err => showFailedStart(err.message));
