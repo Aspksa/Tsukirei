@@ -5,11 +5,11 @@ import {readFileSync} from 'node:fs';
 const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
 const main=readFileSync(new URL('../web/main.js',import.meta.url),'utf8');
 
-test('five primary sidebar destinations',()=>{
+test('four primary sidebar destinations',()=>{
  const sidebar=html.match(/<nav class="nav"[^>]*>([\s\S]*?)<\/nav>/)?.[1]??'';
  const bottom=html.match(/<div class="nav-bottom">([\s\S]*?)<\/div>/)?.[1]??'';
  const pages=[...sidebar.matchAll(/class="nav-button[^\"]*" data-page="([^\"]+)"/g),...bottom.matchAll(/class="nav-button[^\"]*" data-page="([^\"]+)"/g)].map(x=>x[1]);
- assert.deepEqual(pages,['home','brain','tasks','agents','settings']);
+ assert.deepEqual(pages,['home','brain','tasks','settings']);
 });
 test('all legacy brain sections remain available without data migration',()=>{
  for(const name of ['memory','search','soul','living','cognition','supermind']){

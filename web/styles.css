@@ -292,3 +292,12 @@
 .brain-graph-detail{min-height:40px;padding:10px 12px;border:1px solid rgba(196,158,89,.2);border-radius:10px;color:#d7c39b;font-size:12px;line-height:1.6;overflow-wrap:anywhere}
 .brain-map svg g[role="button"]{cursor:pointer}
 .brain-map svg g[role="button"]:focus{outline:none;filter:drop-shadow(0 0 5px #d6ad63)}
+
+/* Quiet interface: keep technical DOM and APIs intact, expose only advanced controls on demand. */
+.advanced-tools{margin-top:20px;padding:20px}
+.advanced-tools>summary{cursor:pointer;font-weight:600;color:#d7b26c}
+.advanced-tools .rag-engine-panel{margin-top:16px}
+.advanced-legacy-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.brain-automated{font-size:12px;color:var(--muted);margin-top:auto}
+#rag-engine-reindex,#rag-engine-refresh,#rag-curator-check,#cog-scan{display:none!important}
+#rag-engine-stats,#rag-engine-badge{display:none!important}

@@ -44,7 +44,6 @@
         <button class="nav-button selected" data-page="home" data-label="Главная" aria-label="Главная" aria-current="page"><svg><use href="#i-home"/></svg></button>
         <button class="nav-button" data-page="brain" data-label="Мозг" aria-label="Мозг"><svg><use href="#i-memory"/></svg></button>
         <button class="nav-button" data-page="tasks" data-label="Дела" aria-label="Дела"><svg><use href="#i-tasks"/></svg></button>
-        <button class="nav-button" data-page="agents" data-label="Агенты" aria-label="Агенты"><svg><use href="#i-agents"/></svg></button>
       </nav>
       <div class="nav-bottom">
         <button class="nav-button" data-page="settings" data-label="Настройки" aria-label="Настройки"><svg><use href="#i-settings"/></svg></button>
@@ -88,12 +87,12 @@
             <div class="glass-panel brain-workspace">
               <div class="panel-kicker">IDENTITY CORE</div><h2>Личность и сверхразум</h2>
               <p>Soul и SuperMind: единая область личности и размышлений.</p>
-              <div class="brain-links"><button class="ghost-button" type="button" data-page="soul">Личность</button><button class="ghost-button" type="button" data-page="supermind">Размышления</button></div>
+              <p class="brain-automated">Работает автоматически · без ручного управления</p>
             </div>
             <div class="glass-panel brain-workspace">
               <div class="panel-kicker">LEARNING CORE</div><h2>Развитие и мышление</h2>
               <p>Living и Cognitive: обучение, проверка и история развития.</p>
-              <div class="brain-links"><button class="ghost-button" type="button" data-page="living">Развитие</button><button class="ghost-button" type="button" data-page="cognition">Проверка знаний</button></div>
+              <p class="brain-automated">Проверка и обучение выполняются в фоне</p>
             </div>
           </div>
         </section>
@@ -631,8 +630,20 @@
               <div class="settings-actions"><button class="gold-button" type="submit">Сохранить настройки</button><button class="ghost-button" type="button" id="check-cloud"><svg><use href="#i-refresh"/></svg> Проверить модели</button></div>
               <div class="settings-feedback" id="settings-feedback" role="status" aria-live="polite"></div>
             </form>
-            <div class="settings-aside"><div class="glass-panel storage-panel"><span class="panel-kicker">ХРАНИЛИЩЕ</span><h3>Только локально</h3><p>Заметки, задачи и диалоги: <code>data/tsukirei.json</code></p><p>Ключ Cloud.ru: <code>data/cloudru-settings.json</code></p><div class="storage-pill">● Никакой внешней синхронизации</div></div><div class="glass-panel storage-panel"><span class="panel-kicker">ПРИВАТНОСТЬ</span><p>Данные отправляются в Cloud.ru только при отправке сообщения или при ручной проверке моделей. Автоматических фоновых запросов нет.</p></div></div>
+            <div class="settings-aside"><div class="glass-panel storage-panel"><span class="panel-kicker">ХРАНИЛИЩЕ</span><h3>Только локально</h3><p>Заметки, задачи и диалоги: <code>data/tsukirei.json</code></p><p>Ключ Cloud.ru: <code>data/cloudru-settings.json</code></p><div class="storage-pill">● Никакой внешней синхронизации</div></div><div class="glass-panel storage-panel"><span class="panel-kicker">ПРИВАТНОСТЬ</span><p>Cloud.ru используется для ответов и только для включённых владельцем фоновых функций с установленными лимитами. Локальные проверки не требуют облака.</p></div></div>
           </div>
+          <details class="glass-panel advanced-tools" id="advanced-tools">
+            <summary>Расширенные настройки и диагностика</summary>
+            <p class="rag-hint">Технические параметры доступны здесь. Внутренние модули и данные сохранены.</p>
+            <div id="advanced-rag-mount"></div>
+            <div class="advanced-legacy-links">
+              <button type="button" class="ghost-button" data-page="soul">Личность</button>
+              <button type="button" class="ghost-button" data-page="living">Развитие</button>
+              <button type="button" class="ghost-button" data-page="cognition">Проверка знаний</button>
+              <button type="button" class="ghost-button" data-page="supermind">Размышления</button>
+              <button type="button" class="ghost-button" data-page="agents">Агенты</button>
+            </div>
+          </details>
         </section>
       </main>
     </div>
