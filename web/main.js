@@ -46,10 +46,11 @@ async function run(action) {
   try { await action(); } catch (err) { notify(err.message || 'Неизвестная ошибка', true); }
 }
 function go(page) {
-  if (!pages[page]) return;
+  if (!Object.hasOwn(pages,page) || !el('page-' + page)) return;
   for (const name of Object.keys(pages)) {
     const section = el('page-' + name);
     const selected = name === page;
+    if (!section) continue;
     section.hidden = !selected;
     section.classList.toggle('is-active', selected);
   }
@@ -72,7 +73,7 @@ function go(page) {
     else brainNav.removeAttribute('aria-current');
   }
   el('shell').classList.remove('menu-open');
-  window.location.hash = page;
+  if (window.location.hash !== '#' + page) window.location.hash = page;
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
   if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
   if (page === 'living') globalThis.TsukireiLivingUI?.refresh();
@@ -198,6 +199,10 @@ function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus()
 
 
 document.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => go(button.dataset.page)));
+window.addEventListener('hashchange',()=>{
+  const target=window.location.hash.slice(1);
+  go(Object.hasOwn(pages,target)?target:'home');
+});
 el('orb-open').addEventListener('click', () => go('memory'));
 el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
