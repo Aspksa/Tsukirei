@@ -159,7 +159,7 @@ export class SoulEngine {
     this.data.journal=unique(this.data.journal,entry,MAX_JOURNAL);
   }
   growthReport(){
-    const growth=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
+    const growth:NonNullable<SoulData['growth']>=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
     return {lastReviewedAt:growth.lastReviewedAt,reviews:growth.reviews,
       history:growth.history.slice(0,40),pendingInitiatives:this.data.initiatives.filter(i=>i.status==='new').length,
       policy:'Локальная проверка наблюдаемых сигналов. Без самостоятельного обучения весов модели и изменения базовых ценностей.'};
@@ -167,7 +167,7 @@ export class SoulEngine {
   async reviewGrowth(force=false){
     return this.modify(()=>{
       if(!this.data.settings.reflectionsEnabled)return {skipped:'Рефлексия отключена'};
-      const growth=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
+      const growth:NonNullable<SoulData['growth']>=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
       const now=Date.now(),last=Date.parse(growth.lastReviewedAt??'');
       if(!force&&Number.isFinite(last)&&now-last<24*60*60*1000)
         return {skipped:'Проверка уже проводилась за последние 24 часа'};
