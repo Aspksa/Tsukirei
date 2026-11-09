@@ -550,3 +550,19 @@ img,svg,video,canvas{max-width:100%}
 .brain-trace-entry p{font-size:11px;color:var(--muted);line-height:1.6;margin-top:7px;overflow-wrap:anywhere}
 .brain-trace-empty{padding:22px;color:var(--muted);border:1px dashed #75618a;border-radius:12px;font-size:12px}
 @media(max-width:520px){.brain-trace{padding:16px}.brain-trace-flow{gap:7px}.brain-trace-flow span{padding:8px;font-size:11px}.brain-trace-entry{padding:11px}}
+
+/* Moonlit Monitor II — measured request health and latency, no synthetic data */
+.monitor-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}
+.monitor-stats>div{display:flex;flex-direction:column;gap:8px;min-width:0;background:linear-gradient(145deg,#292137,#191522);border:1px solid #685575;border-radius:16px;padding:18px}
+.monitor-stats strong{font-size:clamp(21px,3vw,31px);font-weight:650;color:#f0d5a0;font-variant-numeric:tabular-nums}
+.monitor-stats span{font-size:12px;color:#c7b9cf}
+.monitor-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:18px 0 12px}
+.monitor-toolbar label{font-size:12px;color:var(--muted)}
+.monitor-toolbar select{background:#211a2d;color:#f5ecfa;border:1px solid #7a6487;border-radius:10px;padding:10px 12px;max-width:100%;min-height:42px}
+.monitor-toolbar select:focus-visible{outline:2px solid #e6bf78;outline-offset:2px}
+#monitor-visible-count{margin-left:auto;color:#bfb1c9;font-size:12px}
+.monitor-timeline{height:116px;display:flex;align-items:end;gap:4px;padding:15px 12px 10px;background:linear-gradient(180deg,#251c33,#16131f);border:1px solid #675378;border-radius:15px;overflow:hidden}
+.monitor-timeline-bar{flex:1;max-width:28px;min-width:3px;background:linear-gradient(180deg,#f3d99c,#a27d4b);border-radius:4px 4px 1px 1px;transition:height .2s ease}
+.monitor-timeline-bar[data-error="true"]{background:linear-gradient(180deg,#f3a4a6,#ad5666)}
+@media(max-width:520px){.monitor-stats{gap:7px}.monitor-stats>div{padding:12px 9px}.monitor-stats span{font-size:11px}.monitor-timeline{height:95px}.monitor-toolbar select{width:100%}}
+@media(prefers-reduced-motion:reduce){.monitor-timeline-bar{transition:none}}
