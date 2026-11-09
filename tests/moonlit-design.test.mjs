@@ -24,3 +24,16 @@ test('Moonlit Sanctuary remains a CSS-only design change',()=>{
  assert.match(app,/src="\/main.js"/);
  assert.match(app,/href="\/styles.css"/);
 });
+
+test('Moonlit Sanctuary II standardizes interaction states across pages',()=>{
+ for(const selector of ['.ghost-button:hover:not(:disabled)','.empty-state{','.toast.is-error{','input::placeholder','@media(hover:none)']){
+  assert.ok(css.includes(selector),'app '+selector);
+ }
+ for(const selector of ['.btn:hover:not(:disabled)','.empty{','dialog::backdrop{','.form-field:focus-visible','@media(hover:none)']){
+  assert.ok(studio.includes(selector),'studio '+selector);
+ }
+ assert.match(css,/--moon-focus:#f6dda6/);
+ assert.match(studio,/--moon-focus:#f6dda6/);
+ assert.match(css,/prefers-reduced-motion:reduce/);
+ assert.match(studio,/prefers-reduced-motion:reduce/);
+});

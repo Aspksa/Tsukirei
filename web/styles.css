@@ -440,3 +440,36 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 .moon-skip:focus{top:12px}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.nav-button{transition:none}.nav-button:hover{transform:none}}
 @media(max-width:760px){.glass-panel{border-radius:16px}.topbar{backdrop-filter:none}}
+
+/* Moonlit Sanctuary II — coherent components, content density and interaction states */
+:root{
+ --moon-focus:#f6dda6;--moon-success:#9ed4b9;--moon-danger:#f2aaa8;
+ --moon-border:#55445c88;--moon-border-strong:#8a7094;
+ --moon-surface-raised:#252032;--moon-text-soft:#c8c0d0;
+ --moon-ease:cubic-bezier(.2,.7,.2,1);
+}
+.page-heading{margin-bottom:clamp(22px,3vw,38px)}
+.page-heading h1{max-width:22ch;text-wrap:balance;line-height:1.12}
+.page-heading p{max-width:64ch;line-height:1.7;color:var(--muted)}
+.panel-kicker,.eyebrow{color:var(--gold-bright)}
+.glass-panel,.stat-card,.entry-card,.task-row,.feature-card,.hero-card{transition:border-color .18s var(--moon-ease),box-shadow .18s var(--moon-ease),background .18s var(--moon-ease)}
+.entry-card,.task-row{background:linear-gradient(145deg,#211c2b,#171620);border-color:var(--moon-border);border-radius:16px}
+.entry-card:hover,.task-row:hover{border-color:#9e7f9666}
+.stat-card{background:linear-gradient(155deg,#262034,#171620);border:1px solid var(--moon-border);border-radius:18px}
+.stat-card strong{color:var(--text);font-variant-numeric:tabular-nums}
+.stat-card span,.stat-card small{color:var(--muted)}
+.ghost-button{background:#292233;border:1px solid #67536c;color:#f2e9f4;border-radius:12px;min-height:42px;justify-content:center;transition:background .18s var(--moon-ease),border-color .18s var(--moon-ease),transform .18s var(--moon-ease)}
+.ghost-button:hover:not(:disabled){background:#3a2e48;border-color:#c6a57b;transform:translateY(-1px)}
+.ghost-button:active:not(:disabled){transform:translateY(0)}
+.ghost-button:disabled{opacity:.5;cursor:not-allowed}
+.empty-state{border:1px dashed #786285;border-radius:18px;background:linear-gradient(145deg,#211b2b88,#17162088);color:var(--moon-text-soft);line-height:1.7}
+.toast{border-color:#80684d;background:#292334;color:#f6e5c6;border-radius:14px;box-shadow:0 18px 60px #030208b8}
+.toast.is-error{border-color:#a76570;background:#39222e;color:#ffd4d4}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),textarea,select{accent-color:var(--gold);color:var(--text)}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--moon-focus);outline-offset:2px}
+input::placeholder,textarea::placeholder{color:#a79bae}
+button[aria-busy="true"],[aria-busy="true"] button{cursor:progress}
+:where(button,a,input,textarea,select):focus-visible{outline-color:var(--moon-focus)}
+@media(hover:none){.ghost-button:hover:not(:disabled){transform:none}}
+@media(max-width:760px){.page-heading{align-items:flex-start;gap:16px}.page-heading h1{font-size:clamp(29px,8vw,40px)}.stat-card{min-height:112px}.entry-card,.task-row{padding:16px}}
+@media(prefers-reduced-motion:reduce){.glass-panel,.stat-card,.entry-card,.task-row,.feature-card,.hero-card,.ghost-button{transition:none!important}.ghost-button:hover:not(:disabled){transform:none}}

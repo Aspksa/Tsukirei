@@ -17,6 +17,27 @@ body{background:radial-gradient(ellipse 60% 42% at 85% -8%,#55407835,transparent
 ::selection{background:#8d6eaa;color:#fff}
 button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid #f6dda6;outline-offset:3px}
 @media(max-width:760px){.card{border-radius:16px}}
+
+/* Moonlit Sanctuary II — shared controls and feedback language */
+:root{--moon-focus:#f6dda6;--moon-border:#55445c88;--moon-surface:#252032;--moon-soft:#c8c0d0}
+.btn{min-height:42px;border-radius:12px;border-color:#67536c;background:#292233;color:#f2e9f4;transition:background .18s,border-color .18s,transform .18s}
+.btn:hover:not(:disabled){background:#3a2e48;border-color:#c6a57b;transform:translateY(-1px)}
+.btn:active:not(:disabled){transform:translateY(0)}
+.btn.primary{background:var(--gold);border-color:var(--gold);color:#241b21}
+.btn.primary:hover:not(:disabled){background:var(--gold2);border-color:var(--gold2)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.card{border-radius:20px}
+.item,.stat{border-color:var(--moon-border)}
+.empty{background:linear-gradient(145deg,#211b2b88,#17162088);border-color:#786285;color:var(--moon-soft);border-radius:16px}
+.form-field,dialog input{background:#12101b;border-color:#746080;border-radius:11px;accent-color:var(--gold)}
+.form-field:focus-visible,dialog input:focus-visible{outline-color:var(--moon-focus)}
+dialog{background:linear-gradient(155deg,#272033,#17151f);border-color:#9b7e85;box-shadow:0 30px 100px #030208bd}
+dialog::backdrop{background:#030208d6}
+.notice{color:var(--muted);line-height:1.7}
+button[aria-busy="true"]{cursor:progress}
+@media(hover:none){.btn:hover:not(:disabled){transform:none}}
+@media(max-width:760px){.card{border-radius:16px}dialog{padding:20px}}
+@media(prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover:not(:disabled){transform:none}}
 </style></head>
 <body><a class="skip-link" href="#main-content">Перейти к содержимому</a><div class="app"><aside class="side"><a class="brand" href="/" aria-label="Tsukirei главная"><span class="mark">✦</span><span>TSUKIREI</span></a><small>Личное пространство</small><nav class="nav" aria-label="Навигация"><a href="/" title="Главная"><b>⌂</b><span>Главная</span></a><a href="/studio.html" class="active" aria-current="page" title="Центр развития"><b>✧</b><span>Центр развития</span></a><a href="/#tasks" title="Задачи"><b>☷</b><span>Задачи</span></a></nav><div class="sidefoot"><span class="dot"></span>Локальная память<br>Никаких фоновых запросов к ИИ</div></aside>
 <main class="main" id="main-content" tabindex="-1"><header class="top"><div class="crumb">Пространство <span aria-hidden="true"> / </span> <strong>Центр развития</strong></div><div class="topright"><span class="pill">✦ SOUL ENGINE</span><span class="avatar" aria-hidden="true">✧</span></div></header>
