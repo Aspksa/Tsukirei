@@ -94,7 +94,7 @@ test('Reset clears only Soul Engine state after exact confirmation',async t=>{
   const {engine}=local(t);
   await engine.addPreference('Люблю локальные инструменты');
   await engine.feedback('a-1','positive');
-  await assert.rejects(engine.reset('RESET'),/RESET_SOUL/);
+  assert.throws(()=>engine.reset('RESET'),/RESET_SOUL/);
   await engine.reset('RESET_SOUL');
   assert.equal(engine.overview().metrics.positiveFeedback,0);
   assert.equal(engine.overview().preferences.length,0);
