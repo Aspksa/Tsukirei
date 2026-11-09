@@ -155,6 +155,37 @@ export class SoulEngine {
     const entry:Journal={id:randomUUID(),at:new Date().toISOString(),type,text,...(source?{source}:{})};
     this.data.journal=unique(this.data.journal,entry,MAX_JOURNAL);
   }
+  personalityProfile(){
+    const d=this.data;
+    const confirmed=d.preferences.filter(p=>p.status==='confirmed'&&!BEHAVIOR_INJECTION.test(p.text));
+    const lessons=d.lessons.filter(l=>l.confirmed&&!BEHAVIOR_INJECTION.test(l.text));
+    const positive=d.metrics.positiveFeedback,negative=d.metrics.negativeFeedback;
+    const activity=d.metrics.chatsObserved;
+    const signals={
+      continuity:activity,relationshipMemory:confirmed.length,
+      reflection:lessons.length,initiative:d.initiatives.filter(i=>i.status==='accepted').length,
+      positiveFeedback:positive,negativeFeedback:negative
+    };
+    const style=d.settings.tone;
+    const mood=negative>positive&&negative-positive>=3?'внимательнее к исправлениям':
+      positive>negative&&positive-negative>=3?'уверенно-доброжелательный':'ровный';
+    return {
+      name:'Цукирэй',identity:'Персональная ИИ-помощница',role:'Помощь владельцу и развитие качества ответов',
+      character:{tone:style,address:d.settings.address,
+        values:['точность','забота','приватность','самокритика','уважение к решениям владельца'],
+        communication:'Последовательная, уважительная, инициативная без выдуманных действий'},
+      relationship:{confirmedPreferences:confirmed.length,rememberedLessons:lessons.length,
+        interactionCount:activity},
+      emotionalModel:{mode:'симуляция стиля, не субъективные чувства',mood,
+        reason:'Адаптация тона по агрегированной обратной связи'},
+      preferences:confirmed.slice(0,12).map(p=>({text:p.text,source:p.source})),
+      reflections:lessons.slice(0,8).map(l=>({text:l.text,source:l.source})),
+      biography:d.journal.slice(0,40).map(j=>({at:j.at,type:j.type,description:j.text,source:j.source??null})),
+      signals,updatedAt:d.updatedAt,
+      autonomy:'Не выполняет действия и не изменяет правила без соответствующего разрешения',
+      consciousnessClaim:false
+    };
+  }
   overview(){
     const d=this.data;
     const metrics:Metrics={...d.metrics,
@@ -166,7 +197,14 @@ export class SoulEngine {
       statement:'Отображаются реальные записи, обратная связь и локальные проверки; не уровень сознания.'};
   }
   prompt(withMemory=true){
-    return renderPersona(this.data.settings,this.data.preferences,this.data.lessons,withMemory);
+    const base=renderPersona(this.data.settings,this.data.preferences,this.data.lessons,withMemory);
+    if(!withMemory||!this.data.settings.personalContext)return base;
+    const profile=this.personalityProfile();
+    return base+'\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
+      '. Ценности: '+profile.character.values.join(', ')+
+      '. Модель настроения (стиль ответа, не чувства): '+profile.emotionalModel.mood+
+      '. История и опыт отражены в подтверждённых предпочтениях и уроках. '+
+      'Не выдавай моделируемые эмоции за переживания.';
   }
   changeSettings(input:Record<string,unknown>){
     return this.modify(()=>{
