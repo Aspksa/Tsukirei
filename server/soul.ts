@@ -12,13 +12,13 @@ type Tone = 'нежный' | 'спокойный' | 'деловой';
 type PreferenceStatus = 'confirmed' | 'suggested';
 type Preference = { id:string; text:string; status:PreferenceStatus; source:string; createdAt:string };
 type Lesson = { id:string; text:string; source:string; createdAt:string; confirmed:boolean };
-type Journal = { id:string; at:string; type:'preference'|'feedback'|'reflection'|'initiative'|'setting'; text:string; source?:string };
+type Journal = { id:string; at:string; type:'preference'|'feedback'|'reflection'|'initiative'|'setting'|'task'; text:string; source?:string };
 type Initiative = { id:string; topic:string; title:string; reason:string; sourceIds:string[]; at:string; status:'new'|'accepted'|'dismissed' };
 type SoulSettings = {
   address:string; tone:Tone; personalContext:boolean;
   reflectionsEnabled:boolean; initiativeEnabled:boolean;
 };
-type Metrics = { chatsObserved:number; positiveFeedback:number; negativeFeedback:number; confirmedPreferences:number; lessons:number; proposals:number; appliedCorrections:number };
+type Metrics = { chatsObserved:number; positiveFeedback:number; negativeFeedback:number; confirmedPreferences:number; lessons:number; proposals:number; appliedCorrections:number; completedTasks:number };
 type SoulData = {
   version:1;
   settings:SoulSettings;
@@ -26,8 +26,9 @@ type SoulData = {
   lessons:Lesson[];
   journal:Journal[];
   initiatives:Initiative[];
-  metrics:{ chatsObserved:number; positiveFeedback:number; negativeFeedback:number; appliedCorrections:number };
+  metrics:{ chatsObserved:number; positiveFeedback:number; negativeFeedback:number; appliedCorrections:number; completedTasks:number };
   seenMessages:string[];
+  seenTasks:string[];
   recurring:Array<{ topic:string; messageId:string; at:string }>;
   updatedAt:string;
 };
@@ -56,8 +57,8 @@ function empty():SoulData {
     version:1,settings:{address:'хозяин',tone:'нежный',
       personalContext:true,reflectionsEnabled:true,initiativeEnabled:true},
     preferences:[],lessons:[],journal:[],initiatives:[],
-    metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0},
-    seenMessages:[],recurring:[],updatedAt:new Date().toISOString()
+    metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
+    seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString()
   };
 }
 function validate(value:unknown):SoulData {
@@ -67,6 +68,9 @@ function validate(value:unknown):SoulData {
     !Array.isArray(state.lessons)||!Array.isArray(state.journal)||!Array.isArray(state.initiatives)||
     !Array.isArray(state.seenMessages)||!Array.isArray(state.recurring)||!state.metrics)
     throw new Error('Несовместимый формат данных личности');
+  // Backward-compatible upgrade of early v0.9 personality archives.
+  if(!Array.isArray(state.seenTasks))state.seenTasks=[];
+  if(typeof state.metrics.completedTasks!=='number')state.metrics.completedTasks=0;
   if(!tones.includes(state.settings.tone)||typeof state.settings.address!=='string')
     throw new Error('Некорректные настройки личности');
   return state;
@@ -234,6 +238,17 @@ export class SoulEngine {
     return this.modify(()=>{
       // No chat transcript, notes, files or RAG data are touched.
       this.data=empty();
+      return true;
+    });
+  }
+  async observeCompletedTask(taskId:string,title:string){
+    const id=bounded(taskId,90,'ID задачи');
+    const label=bounded(title,160,'Задача');
+    return this.modify(()=>{
+      if(!this.data.settings.reflectionsEnabled||this.data.seenTasks.includes(id))return false;
+      this.data.seenTasks=[id,...this.data.seenTasks].slice(0,1500);
+      this.data.metrics.completedTasks++;
+      this.journal('task','Владелец отметил выполненной: '+label.slice(0,140),'task:'+id);
       return true;
     });
   }
