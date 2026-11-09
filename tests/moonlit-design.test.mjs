@@ -37,3 +37,12 @@ test('Moonlit Sanctuary II standardizes interaction states across pages',()=>{
  assert.match(css,/prefers-reduced-motion:reduce/);
  assert.match(studio,/prefers-reduced-motion:reduce/);
 });
+
+test('Moonlit Sanctuary III protects narrow viewports and dialogs',()=>{
+ for(const rule of ['.workspace,.main,.page','.rag-search-controls{flex-wrap:wrap}', '.inline-form{flex-wrap:wrap}', '.topbar-section{overflow:hidden', '@media(max-width:360px)']){
+  assert.ok(css.includes(rule),'app '+rule);
+ }
+ for(const rule of ['.nav{min-width:0;max-width:calc(100vw - 160px);overflow-x:auto','dialog{max-height:calc(100dvh - 30px);overflow-y:auto','@media(max-width:390px)']){
+  assert.ok(studio.includes(rule),'studio '+rule);
+ }
+});

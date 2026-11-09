@@ -473,3 +473,36 @@ button[aria-busy="true"],[aria-busy="true"] button{cursor:progress}
 @media(hover:none){.ghost-button:hover:not(:disabled){transform:none}}
 @media(max-width:760px){.page-heading{align-items:flex-start;gap:16px}.page-heading h1{font-size:clamp(29px,8vw,40px)}.stat-card{min-height:112px}.entry-card,.task-row{padding:16px}}
 @media(prefers-reduced-motion:reduce){.glass-panel,.stat-card,.entry-card,.task-row,.feature-card,.hero-card,.ghost-button{transition:none!important}.ghost-button:hover:not(:disabled){transform:none}}
+
+/* Moonlit Sanctuary III — narrow viewport and text-zoom resilience */
+html{min-width:0}
+.workspace,.main,.page,.glass-panel,.stat-card,.entry-card,.task-row{min-width:0}
+.page-heading h1,.entry-card h3,.task-row,.empty-state{overflow-wrap:anywhere}
+.page-heading,.quick-panel,.entry-card-top{min-width:0}
+input,textarea,select{max-width:100%}
+img,svg,video,canvas{max-width:100%}
+:where(.rag-search-controls,.inline-form,.section-actions){min-width:0}
+:where(.rag-search-controls,.inline-form) > input{min-width:0}
+:where(.rag-search-controls,.inline-form) > button{flex-shrink:0}
+@media(max-width:520px){
+ .topbar{padding-inline:14px;min-width:0}
+ .heading-left,.topbar-right{min-width:0}
+ .wordmark{letter-spacing:.12em}
+ .topbar-section{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .topbar-right #status-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .main{padding-inline:16px}
+ .page-heading h1{font-size:clamp(27px,8vw,38px)}
+ .rag-search-controls{flex-wrap:wrap}
+ .rag-search-controls input{flex-basis:100%}
+ .rag-search-controls button{min-height:42px}
+ .inline-form{flex-wrap:wrap}
+ .inline-form > input{flex-basis:100%}
+ .inline-form > button{min-height:42px}
+ .entry-card-top{flex-wrap:wrap}
+ .toast{bottom:max(14px,env(safe-area-inset-bottom));max-width:calc(100vw - 24px)}
+}
+@media(max-width:360px){
+ .topbar-divider,.topbar-section{display:none}
+ .main{padding-inline:12px}
+ .stat-card{padding:16px 13px}
+}
