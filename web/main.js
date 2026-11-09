@@ -1,6 +1,6 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', cognition: 'Мышление', supermind: 'Душа и сверхразум', settings: 'Настройки' };
+const pages = { brain: 'Мозг', home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', living: 'Развитие', cognition: 'Мышление', supermind: 'Душа и сверхразум', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
@@ -62,6 +62,15 @@ function go(page) {
     }
   });
   el('topbar-section').textContent = pages[page];
+  // The five-item sidebar stays on Brain while a legacy subsystem is open.
+  const brainPages = new Set(['brain','memory','search','soul','living','cognition','supermind']);
+  const brainNav = document.querySelector('.nav-button[data-page="brain"]');
+  if (brainNav) {
+    const active = brainPages.has(page);
+    brainNav.classList.toggle('selected',active);
+    if (active) brainNav.setAttribute('aria-current','page');
+    else brainNav.removeAttribute('aria-current');
+  }
   el('shell').classList.remove('menu-open');
   window.location.hash = page;
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
