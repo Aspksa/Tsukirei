@@ -74,12 +74,69 @@ function go(page) {
   }
   el('shell').classList.remove('menu-open');
   if (window.location.hash !== '#' + page) window.location.hash = page;
+  if (page === 'brain') void refreshBrainOverview();
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
   if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
   if (page === 'living') globalThis.TsukireiLivingUI?.refresh();
   if (page === 'cognition') globalThis.TsukireiCognitionUI?.refresh();
   if (page === 'supermind') globalThis.TsukireiSupermindUI?.refresh();
 }
+let brainLoading=false;
+async function refreshBrainOverview(){
+  if(brainLoading)return;
+  brainLoading=true;
+  try{
+    const overview=await api('/api/brain/overview');
+    const memory=overview.memory,learning=overview.learning,identity=overview.identity;
+    const values=[
+      ['Заметки',memory.notes],['Сообщения',memory.messages],['Факты',memory.facts],
+      ['Связи',memory.worldEdges],['Пробелы',learning.gaps],['Уроки',identity.lessons]
+    ];
+    const metrics=el('brain-metrics');
+    metrics.replaceChildren();
+    for(const [label,value] of values){
+      const item=document.createElement('div');
+      item.className='brain-metric';
+      const number=document.createElement('strong');
+      number.textContent=String(value);
+      const name=document.createElement('span');
+      name.textContent=label;
+      item.append(number,name);metrics.append(item);
+    }
+    const svg=el('brain-map-svg');
+    svg.replaceChildren();
+    const ns='http://www.w3.org/2000/svg';
+    const make=(tag,attrs,text)=>{
+      const node=document.createElementNS(ns,tag);
+      for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));
+      if(text!==undefined)node.textContent=text;
+      svg.append(node);return node;
+    };
+    const nodes=[
+      {x:100,y:110,label:'Память',count:memory.notes+memory.messages},
+      {x:260,y:65,label:'Факты',count:memory.facts},
+      {x:260,y:165,label:'Связи',count:memory.worldEdges},
+      {x:440,y:65,label:'Обучение',count:identity.scans},
+      {x:440,y:165,label:'Проверка',count:learning.duplicateGroups},
+      {x:610,y:110,label:'Личность',count:identity.lessons+identity.lifeEvents}
+    ];
+    for(const [a,b] of [[0,1],[0,2],[1,3],[2,4],[3,5],[4,5],[1,2],[3,4]]){
+      make('line',{x1:nodes[a].x,y1:nodes[a].y,x2:nodes[b].x,y2:nodes[b].y,stroke:'#9f8146','stroke-opacity':'.42','stroke-width':1.5});
+    }
+    for(const node of nodes){
+      const radius=11+Math.min(22,Math.sqrt(Math.max(0,node.count))*2.2);
+      make('circle',{cx:node.x,cy:node.y,r:radius,fill:'#d1a95a','fill-opacity':'.14',stroke:'#c7a05a','stroke-width':1.5});
+      make('text',{x:node.x,y:node.y-3,'text-anchor':'middle',fill:'#f0d49a','font-size':12},String(node.count));
+      make('text',{x:node.x,y:node.y+radius+17,'text-anchor':'middle',fill:'#e9e2d5','font-size':12},node.label);
+    }
+    const running=overview.background.filter(task=>task.running).length;
+    el('brain-footnote').textContent='Фоновые задачи: '+overview.background.length+' · выполняются: '+running+
+      ' · Cloud.ru для этой карты: 0 запросов · Размер узлов отражает число записей, не уровень сознания.';
+  }catch(error){
+    el('brain-metrics').textContent='Не удалось загрузить карту: '+(error.message||'ошибка');
+  }finally{brainLoading=false;}
+}
+el('brain-refresh').addEventListener('click',()=>{void refreshBrainOverview();});
 function renderStatus() {
   const settings = viewState.settings;
   el('status-text').textContent = settings.configured ? 'Cloud.ru настроен' : 'Локальная система';
