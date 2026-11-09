@@ -518,3 +518,17 @@ img,svg,video,canvas{max-width:100%}
 @media(max-width:520px) and (prefers-reduced-motion:reduce){
  .sidebar,.menu-open .sidebar{transition:none}
 }
+
+/* Moonlit Brain — activity visualization from locally recorded cognition events */
+.brain-chart-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:22px}
+.brain-chart-head h3{font-size:15px;color:var(--text);font-weight:650}
+.brain-chart-head span,.brain-chart-caption{font-size:12px;color:var(--muted);line-height:1.65}
+.brain-growth-chart{border:1px solid #62507177;border-radius:18px;background:radial-gradient(ellipse at 60% 15%,#49305c55,transparent 65%),linear-gradient(150deg,#171422,#110f1a);padding:12px 14px;margin-top:12px;min-height:160px;overflow:hidden}
+.brain-growth-chart svg{display:block;width:100%;height:auto;max-height:270px}
+.brain-chart-grid{stroke:#8c73904d;stroke-width:1;stroke-dasharray:4 6}
+.brain-chart-axis{fill:#bcb0c7;font-size:12px;font-family:system-ui,sans-serif}
+.brain-chart-bar{fill:#d9b574;stroke:#f5d8a5;stroke-width:.7}
+.brain-chart-bar-empty{fill:#55446166}
+.brain-chart-caption{margin-top:9px;overflow-wrap:anywhere}
+@media(max-width:520px){.brain-growth-chart{padding:8px 6px;border-radius:14px}.brain-chart-head{align-items:flex-start}.brain-chart-head span{font-size:11px}}
+@media(prefers-contrast:more){.brain-chart-grid{stroke:#c9b7d0}.brain-chart-axis{fill:#fff}.brain-chart-bar{fill:#ffe2a6;stroke:#fff}.brain-growth-chart{border-color:#e3c6ef}}
