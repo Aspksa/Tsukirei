@@ -336,6 +336,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id = pathname.slice('/api/tasks/'.length);
     if (!validId(id)) throw new HttpError(400, 'Неверный идентификатор');
     const input = method === 'PATCH' ? await bodyJson(req) : null;
+    let completedTask: {id:string;title:string}|null=null;
     await mutateState(state => {
       const task = state.tasks.find(item => item.id === id);
       if (!task) throw new HttpError(404, 'Задача не найдена');
@@ -343,8 +344,13 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       else {
         if (typeof input?.done !== 'boolean') throw new HttpError(400, 'Поле done должно быть boolean');
         task.done = input.done;
+        if(input.done)completedTask={id:task.id,title:task.title};
       }
     });
+    if(completedTask){
+      try {await soul.observeCompletedTask(completedTask.id,completedTask.title);}
+      catch(error){console.warn('[Soul] Не удалось записать выполнение задачи:',error instanceof Error?error.message:String(error));}
+    }
     json(res, 200, { ok: true }); return;
   }
   if (method === 'POST' && pathname === '/api/settings') {
