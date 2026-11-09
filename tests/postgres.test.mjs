@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const databaseUrl = process.env.TSUKIREI_DATABASE_URL;
-test('PostgreSQL + pgvector migration, transaction safety and knowledge search', { skip: !databaseUrl, timeout: 60000 }, async (t) => {
+test('PostgreSQL + pgvector migration, transaction safety and knowledge search', { skip: !databaseUrl, timeout: 120000 }, async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'tsukirei-pg-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const legacy = { notes: [{ id: randomUUID(), title: 'Старая запись', body: 'данные не теряются', createdAt: new Date().toISOString() }], tasks: [], messages: [] };
@@ -90,6 +90,81 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   assert.equal(ragStatus.status,200);
   assert.equal(ragStatus.data.cloudRequestsForRetrieval,0);
   assert.equal(ragStatus.data.documents,1);
+  async function awaitIndex(atLeast) {
+    for(let i=0;i<140;i++){
+      const state=await api(first.base,'/api/rag/engine');
+      assert.equal(state.status,200,JSON.stringify(state.data));
+      const w=state.data.worker;
+      if(w.error&&!w.running&&!w.pending)throw Error('Ошибка рабочего индекса: '+w.error);
+      if(w.lastRun&&!w.pending&&!w.running&&state.data.index.records>=atLeast)
+        return state.data;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    throw Error('Фоновый RAG-индекс не завершился');
+  }
+  const verifiedInitial=await awaitIndex(3);
+  assert.ok(verifiedInitial.index.records>=3);
+  assert.equal(verifiedInitial.provider.embeddingsEnabled,false);
+  assert.equal(verifiedInitial.provider.requestsToday,0);
+  const example=await api(first.base,'/api/notes','POST',{
+    title:'Граф проектной памяти',
+    body:'MemOS использует PostgreSQL.\nСтатус: активен\nИсходная система хранит факты.'
+  });
+  const exactCopy=await api(first.base,'/api/notes','POST',{
+    title:'Граф проектной памяти',
+    body:'MemOS использует PostgreSQL.\nСтатус: активен\nИсходная система хранит факты.'
+  });
+  const conflict=await api(first.base,'/api/notes','POST',{
+    title:'Проверить состояние',
+    body:'Статус: остановлен\nТребуется подтверждение человеком.'
+  });
+  assert.ok([example,exactCopy,conflict].every(item=>item.status===201));
+  const indexed=await awaitIndex(6);
+  assert.ok(indexed.index.relations>=1,JSON.stringify(indexed.index));
+  const graph=await api(first.base,'/api/rag/graph?q=MemOS');
+  assert.equal(graph.status,200);
+  assert.ok(graph.data.items.some(link=>link.subject==='memos'&&link.object==='postgresql'
+    &&link.source_key==='note:'+example.data.note.id+':0'),JSON.stringify(graph.data));
+  const curator=await api(first.base,'/api/rag/curator');
+  assert.equal(curator.status,200);
+  assert.equal(curator.data.automaticDeletion,false);
+  assert.ok(curator.data.items.some(x=>x.type==='duplicate'));
+  assert.ok(curator.data.items.some(x=>x.type==='possible_conflict'));
+  const hybridAfterIndex=await api(first.base,'/api/rag/search','POST',{
+    query:'Tsukirei сохраняет знания',embedding:[1,0,0],limit:8
+  });
+  assert.equal(hybridAfterIndex.status,200,JSON.stringify(hybridAfterIndex.data));
+  assert.ok(hybridAfterIndex.data.items.some(x=>x.id===fact.data.knowledge.id));
+  const cacheOne=await api(first.base,'/api/rag/search','POST',{
+    query:'MemOS PostgreSQL',limit:6
+  });
+  const cacheTwo=await api(first.base,'/api/rag/search','POST',{
+    query:'MemOS PostgreSQL',limit:6
+  });
+  assert.equal(cacheTwo.data.cached,true);
+  assert.equal(cacheOne.data.cloudRequests,0);
+  const pause=await api(first.base,'/api/rag/engine/pause','POST',{paused:true});
+  assert.equal(pause.status,200);
+  assert.equal(pause.data.worker.paused,true);
+  const newNote=await api(first.base,'/api/notes','POST',{
+    title:'Свежая запись при паузе',body:'Уникальный токен плавикатор.'
+  });
+  assert.equal(newNote.status,201);
+  const current=await api(first.base,'/api/rag/search','POST',{query:'плавикатор',limit:6});
+  assert.ok(current.data.items.some(item=>item.id===newNote.data.note.id),
+    'Fallback should see new note before index refresh: '+JSON.stringify(current.data));
+  const resume=await api(first.base,'/api/rag/engine/pause','POST',{paused:false});
+  assert.equal(resume.status,200);
+  assert.equal(resume.data.worker.paused,false);
+  await awaitIndex(7);
+  const removedNote=await api(first.base,'/api/notes/'+newNote.data.note.id,'DELETE');
+  assert.equal(removedNote.status,200);
+  await awaitIndex(6);
+  const missingAfterDeletion=await api(first.base,'/api/rag/search','POST',{
+    query:'плавикатор',limit:6
+  });
+  assert.ok(!missingAfterDeletion.data.items.some(x=>x.id===newNote.data.note.id),
+    'Deleted note must not remain in the index');
   const tooLarge=await api(first.base,'/api/rag/documents','POST',{
     title:'Большой документ',content:'A'.repeat(100001)
   });
