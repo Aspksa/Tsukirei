@@ -122,3 +122,12 @@ test('monitor insights derive only from actual local request trace',()=>{
  assert.match(main,/bar\.dataset\.error=String/);
  assert.match(css,/\.monitor-timeline-bar\{/);
 });
+
+test('monitor server stage UI is separate and fetches confirmed server records',()=>{
+ assert.match(app,/id="monitor-server-steps"/);
+ assert.match(app,/id="monitor-server-refresh"/);
+ assert.match(main,/api\('\/api\/monitor\/steps'\)/);
+ assert.match(main,/function refreshMonitorServerSteps\(/);
+ assert.match(main,/if\(page==='monitor'\)void refreshMonitorServerSteps\(\)/);
+ assert.match(css,/\.monitor-server-step\{/);
+});
