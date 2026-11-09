@@ -268,15 +268,15 @@ async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
     const now=new Date().toISOString();
     const userId=randomUUID();
     const assistantId=randomUUID();
-    const archive=await mutateState(state=>{
+    const archive=await monitorStage(traceId,'Сохранение переписки','mutateState() → PostgreSQL или локальный JSON',()=>mutateState(state=>{
       state.messages.push({id:userId,role:'user',content:prompt,createdAt:now});
       state.messages.push({id:assistantId,role:'assistant',content:answer.trim(),createdAt:now});
       if (!database) state.messages=state.messages.slice(-250);
       return state.messages.slice(-250);
-    });
+    }));
     // Personality journal is a separate local file. A temporary write failure
     // must not conceal a successfully delivered and archived chat response.
-    try { await soul.observeExchange(userId,prompt,answer.trim()); }
+    try { await monitorStage(traceId,'Обработка опыта','soul.observeExchange() → server/soul.ts',()=>soul.observeExchange(userId,prompt,answer.trim())); }
     catch(error) { console.warn('[Soul] Не удалось обработать опыт:',error instanceof Error?error.message:String(error)); }
     void supermind.scan().catch(error=>console.warn('[SuperMind] Не удалось обновить историю:',
       error instanceof Error?error.message:String(error)));
