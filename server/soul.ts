@@ -158,9 +158,35 @@ export class SoulEngine {
     const entry:Journal={id:randomUUID(),at:new Date().toISOString(),type,text,...(source?{source}:{})};
     this.data.journal=unique(this.data.journal,entry,MAX_JOURNAL);
   }
+  growthObjectives(){
+    const d=this.data;
+    const completed=d.metrics.completedTasks;
+    const feedback=d.metrics.positiveFeedback+d.metrics.negativeFeedback;
+    const reviewed=d.growth?.reviews??0;
+    const lessons=d.lessons.filter(l=>l.confirmed).length;
+    const reviewedInitiatives=d.initiatives.filter(i=>i.status!=='new').length;
+    const objectives=[
+      {id:'feedback-quality',title:'Учиться на обратной связи',value:feedback,target:10,
+        evidence:'Количество оценок владельца; не показатель точности ответов'},
+      {id:'reflection-habit',title:'Регулярно проверять решения',value:reviewed,target:7,
+        evidence:'Количество сохранённых локальных проверок'},
+      {id:'correction-memory',title:'Сохранять проверенные исправления',value:lessons,target:5,
+        evidence:'Количество подтверждённых уроков из обратной связи'},
+      {id:'initiative-review',title:'Разбирать инициативы с владельцем',value:reviewedInitiatives,target:5,
+        evidence:'Количество принятых или отклонённых предложений'},
+      {id:'task-history',title:'Учитывать выполненные задачи',value:completed,target:10,
+        evidence:'Количество задач, отмеченных выполненными владельцем'}
+    ];
+    return {generatedAt:new Date().toISOString(),objectives:objectives.map(o=>({
+      ...o,progress:Math.min(100,Math.round(o.value/o.target*100)),
+      status:o.value>=o.target?'milestone-reached':'in-progress'
+    })),automaticCompletion:false,
+      note:'Измеряются события и сохранённые доказательства, а не интеллект или сознание.'};
+  }
   growthReport(){
     const growth:NonNullable<SoulData['growth']>=this.data.growth??{lastReviewedAt:null,reviews:0,history:[]};
     return {lastReviewedAt:growth.lastReviewedAt,reviews:growth.reviews,
+      objectives:this.growthObjectives().objectives,
       history:growth.history.slice(0,40),pendingInitiatives:this.data.initiatives.filter(i=>i.status==='new').length,
       policy:'Локальная проверка наблюдаемых сигналов. Без самостоятельного обучения весов модели и изменения базовых ценностей.'};
   }
