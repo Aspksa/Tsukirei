@@ -38,6 +38,30 @@ button[aria-busy="true"]{cursor:progress}
 @media(hover:none){.btn:hover:not(:disabled){transform:none}}
 @media(max-width:760px){.card{border-radius:16px}dialog{padding:20px}}
 @media(prefers-reduced-motion:reduce){.btn{transition:none}.btn:hover:not(:disabled){transform:none}}
+
+/* Moonlit Sanctuary III — responsive navigation, forms and dialogs */
+.app,.main,.hero,.grid,.card,.item{min-width:0}
+.hero h1,.card h3,.item strong,.crumb{overflow-wrap:anywhere}
+input,textarea,select{max-width:100%}
+.nav a{min-width:0}
+@media(max-width:700px){
+ .side{gap:12px;min-width:0}
+ .brand{flex-shrink:0}
+ .nav{min-width:0;max-width:calc(100vw - 160px);overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin}
+ .nav a{flex-shrink:0;min-width:40px;min-height:42px;justify-content:center}
+ .top{flex-wrap:wrap;gap:12px}
+ .topright{flex-wrap:wrap}
+ .hero h1{font-size:clamp(30px,9vw,43px)}
+ .card{padding:18px}
+ dialog{max-height:calc(100dvh - 30px);overflow-y:auto;overscroll-behavior:contain}
+}
+@media(max-width:390px){
+ .side{padding-inline:10px}
+ .nav{max-width:calc(100vw - 145px)}
+ .brand{font-size:15px;gap:7px}
+ .main{padding-inline:12px}
+ .btn{padding:10px 12px}
+}
 </style></head>
 <body><a class="skip-link" href="#main-content">Перейти к содержимому</a><div class="app"><aside class="side"><a class="brand" href="/" aria-label="Tsukirei главная"><span class="mark">✦</span><span>TSUKIREI</span></a><small>Личное пространство</small><nav class="nav" aria-label="Навигация"><a href="/" title="Главная"><b>⌂</b><span>Главная</span></a><a href="/studio.html" class="active" aria-current="page" title="Центр развития"><b>✧</b><span>Центр развития</span></a><a href="/#tasks" title="Задачи"><b>☷</b><span>Задачи</span></a></nav><div class="sidefoot"><span class="dot"></span>Локальная память<br>Никаких фоновых запросов к ИИ</div></aside>
 <main class="main" id="main-content" tabindex="-1"><header class="top"><div class="crumb">Пространство <span aria-hidden="true"> / </span> <strong>Центр развития</strong></div><div class="topright"><span class="pill">✦ SOUL ENGINE</span><span class="avatar" aria-hidden="true">✧</span></div></header>
