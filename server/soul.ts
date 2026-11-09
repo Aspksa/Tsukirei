@@ -225,7 +225,7 @@ export class SoulEngine {
   addCommitment(title:unknown,sourceId:unknown){
     const clean=bounded(title,180,'Обязательство');
     const source=bounded(sourceId,120,'Источник');
-    if(BEHAVIOR_INJECTION.test(clean)||!(/^(chat|task|manual):[\\w.-]{1,100}$/u).test(source))
+    if(BEHAVIOR_INJECTION.test(clean)||!(/^(chat|task|manual):[A-Za-z0-9_.-]{1,100}$/u).test(source))
       throw new Error('Недопустимое обязательство или источник');
     return this.modify(()=>{
       if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
@@ -242,7 +242,7 @@ export class SoulEngine {
   decideCommitment(id:string,status:'accepted'|'completed'|'failed'|'cancelled',evidenceId?:string,note?:string){
     if(!['accepted','completed','failed','cancelled'].includes(status))throw new Error('Недопустимый статус');
     const evidence=evidenceId?bounded(evidenceId,120,'Источник подтверждения'):'';
-    if(evidence&&!(/^(chat|task|manual):[\\w.-]{1,100}$/u).test(evidence))throw new Error('Недопустимый источник');
+    if(evidence&&!(/^(chat|task|manual):[A-Za-z0-9_.-]{1,100}$/u).test(evidence))throw new Error('Недопустимый источник');
     const detail=note?bounded(note,240,'Комментарий'):'';
     return this.modify(()=>{
       if(!this.data.settings.personalContext)throw new Error('Персональный контекст отключён');
