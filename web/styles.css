@@ -311,3 +311,9 @@
 .brain-review{margin-top:18px;border-top:1px solid #3b332b;padding-top:13px}
 .brain-review summary{cursor:pointer;color:var(--gold);font-size:12px}
 #brain-review-list{display:grid;gap:8px;margin-top:12px}
+
+/* Evidence inspection in the real knowledge map. */
+.brain-graph-detail strong{display:block;color:#efd3a2;font-size:13px;margin-bottom:7px}
+.brain-graph-detail p{color:#c1b5a2;font-size:11px;line-height:1.6;padding:6px 0;border-top:1px solid #44382b;overflow-wrap:anywhere}
+#brain-map-svg g[role="button"]{cursor:pointer;outline:none}
+#brain-map-svg g[role="button"]:focus-visible circle{stroke:#fff2c6;stroke-width:3}
