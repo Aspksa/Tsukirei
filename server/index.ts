@@ -434,6 +434,15 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/api/cognition/hygiene') {
     json(res,200,cognition.hygiene());return;
   }
+  if (method === 'GET' && pathname === '/api/cognition/review-queue') {
+    json(res,200,cognition.reviewQueue());return;
+  }
+  if (method === 'GET' && pathname === '/api/cognition/consolidated') {
+    json(res,200,{items:cognition.consolidatedKnowledge(),readOnly:true});return;
+  }
+  if (method === 'GET' && pathname === '/api/cognition/growth') {
+    json(res,200,cognition.growthHistory());return;
+  }
   if (method === 'GET' && pathname === '/api/cognition/dreams') {
     json(res,200,{items:cognition.dreams()});return;
   }
