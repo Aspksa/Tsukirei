@@ -625,7 +625,19 @@ function setMobileMenu(open){
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
 }
-el('mobile-menu').addEventListener('click',()=>setMobileMenu(!el('shell').classList.contains('menu-open')));
+el('mobile-menu').addEventListener('click',()=>{
+ const opening=!el('shell').classList.contains('menu-open');
+ setMobileMenu(opening);
+ if(opening) el('app-sidebar').querySelector('.nav-button')?.focus();
+});
+document.addEventListener('keydown',event=>{
+ if(event.key!=='Tab'||!el('shell').classList.contains('menu-open'))return;
+ const focusable=[el('mobile-menu'),...el('app-sidebar').querySelectorAll('a[href],button:not(:disabled)')].filter(node=>node.getClientRects().length);
+ if(!focusable.length)return;
+ const index=focusable.indexOf(document.activeElement);
+ if(event.shiftKey && (index<=0)){event.preventDefault();focusable.at(-1).focus();}
+ else if(!event.shiftKey && (index===focusable.length-1||index<0)){event.preventDefault();focusable[0].focus();}
+});
 document.addEventListener('pointerdown',event=>{
  if(!el('shell').classList.contains('menu-open'))return;
  if(event.target.closest('#app-sidebar, #mobile-menu'))return;

@@ -66,3 +66,12 @@ test('chat and mobile navigation never stay open together',()=>{
  assert.match(main,/event\.stopImmediatePropagation\(\)/);
  assert.match(main,/if \(event\.key === 'Escape' && !el\('chat-panel'\)\.hidden\)/);
 });
+
+test('mobile drawer cycles keyboard focus and initially focuses navigation',()=>{
+ assert.match(main,/if\(opening\) el\('app-sidebar'\)\.querySelector\('\.nav-button'\)\?\.focus\(\)/);
+ assert.match(main,/event\.key!=='Tab'/);
+ assert.match(main,/focusable\.indexOf\(document\.activeElement\)/);
+ assert.match(main,/event\.shiftKey && \(index<=0\)/);
+ assert.match(main,/focusable\.at\(-1\)\.focus\(\)/);
+ assert.match(main,/focusable\[0\]\.focus\(\)/);
+});
