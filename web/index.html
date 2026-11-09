@@ -103,6 +103,11 @@
               <button type="button" data-brain-period="30" aria-pressed="true">30 дней</button>
               <button type="button" data-brain-period="all" aria-pressed="false">Вся история</button>
             </div>
+            <div class="brain-chart-head"><h3>Ритм событий</h3><span>Фактические события · без прогнозов</span></div>
+            <div class="brain-growth-chart" id="brain-growth-chart" role="img" aria-label="Загрузка графика событий">
+              <svg id="brain-growth-svg" viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+            </div>
+            <p class="brain-chart-caption" id="brain-chart-caption" aria-live="polite">График появится после загрузки истории.</p>
             <div id="brain-growth-events" class="brain-growth-events"></div>
             <details class="brain-review">
               <summary>Знания, требующие проверки</summary>
