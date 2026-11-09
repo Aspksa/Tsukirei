@@ -64,6 +64,14 @@
       <main class="main">
         <section class="page" id="page-brain" hidden aria-labelledby="brain-title">
           <div class="page-heading"><div><h1 id="brain-title">Мозг <em>Цукирэй.</em></h1><p>Память, знания, личность и развитие в одном пространстве.</p></div></div>
+          <div class="glass-panel brain-live" aria-label="Живая карта памяти">
+            <div class="brain-live-header"><div><div class="panel-kicker">ЛОКАЛЬНЫЕ ДАННЫЕ · БЕЗ ОБЛАЧНЫХ ЗАПРОСОВ</div><h2>Карта роста знаний</h2></div><button class="ghost-button" type="button" id="brain-refresh">Обновить</button></div>
+            <div class="brain-metrics" id="brain-metrics" aria-live="polite">Загрузка сведений...</div>
+            <div class="brain-map" id="brain-map" role="img" aria-label="Схема подсистем памяти, обучения и личности">
+              <svg id="brain-map-svg" viewBox="0 0 700 230" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+            </div>
+            <div class="brain-footnote" id="brain-footnote">Размер узлов отражает число записей, а не интеллект или сознание.</div>
+          </div>
           <div class="brain-workspaces" role="navigation" aria-label="Области мозга">
             <div class="glass-panel brain-workspace">
               <div class="panel-kicker">ЗНАНИЯ</div><h2>Память и RAG</h2>
