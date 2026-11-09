@@ -489,8 +489,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     json(res,200,soul.outreachInbox());return;
   }
   if (method === 'POST' && pathname === '/api/soul/outreach/dismiss') {
-    const body=await parseBody(req);
-    json(res,200,await soul.dismissOutreach(String(body.id??'')));return;
+    const body=await bodyJson(req);
+    try{json(res,200,await soul.dismissOutreach(String(body.id??'')));}
+    catch(error){throw new HttpError(400,error instanceof Error?error.message:'Некорректное предложение');}
+    return;
   }
   if (method === 'GET' && pathname === '/api/soul/conversation-plan') {
     json(res,200,soul.conversationPlan());return;
