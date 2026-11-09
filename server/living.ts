@@ -3,10 +3,10 @@ import {existsSync,mkdirSync,readFileSync,renameSync,writeFileSync} from 'node:f
 import {join} from 'node:path';
 type Kind='reflection'|'question'|'goal'|'skill'|'critique';
 type Status='proposed'|'approved'|'verified'|'rejected'|'rolled_back';
-type Idea={id:string;kind:Kind;title:string;reason:string;evidence:string[];steps:string[];status:Status;origin:'local'|'cloud';createdAt:string;revision:number};
+type Idea={id:string;kind:Kind;title:string;reason:string;evidence:string[];steps:string[];status:Status;origin:'local'|'cloud';createdAt:string;revision:number;verification?:{method:string;note:string;at:string}};
 type Settings={enabled:boolean;cloudEnabled:boolean;shareRecentText:boolean;idleMinutes:number;intervalMinutes:number;maxCloudCallsPerDay:number};
 type Store={version:1;settings:Settings;ideas:Idea[];journal:Array<{id:string;at:string;kind:string;message:string}>;
- budget:{date:string;calls:number};lastScanAt:string|null;lastCloudAt:string|null;fingerprint:string;
+ budget:{date:string;calls:number};lastScanAt:string|null;lastCloudAt:string|null;fingerprint:string;cloudFingerprint?:string;
  lastSummary:string;lastError:string|null;metrics:{localRuns:number;cloudRuns:number;verifiedSkills:number;rejectedIdeas:number}};
 type Source={id:string;role:string;content:string};
 type State={notes:Array<{id:string;title:string;body:string}>;tasks:Array<{id:string;title:string;done:boolean}>;messages:Source[]};
@@ -72,7 +72,7 @@ export class LivingCore{
  }
  private observe(state:State,soul:Soul,share:boolean){
   const refs=new Map<string,string>();
-  for(const i of soul.initiatives.slice(0,8))refs.set('initiative:'+i.id,short(i.title+' '+i.reason,300));
+  for(const i of soul.initiatives.slice(0,8))refs.set('initiative:'+i.id,share?short(i.title+' '+i.reason,300):'Повторяющаяся проблема: '+short(i.topic,30));
   for(const l of soul.lessons.slice(0,8))refs.set('lesson:'+l.id,share?short(l.text,300):'Замечание владельца');
   for(const n of state.notes.slice(0,6))refs.set('note:'+n.id,share?short(n.title+' '+n.body,400):'Локальная заметка');
   for(const t of state.tasks.slice(0,8))refs.set('task:'+t.id,share?short(t.title,160):'Задача');
@@ -85,7 +85,9 @@ export class LivingCore{
  private async local(force=false){
   const state=await this.deps.read(),soul=this.deps.soul();
   const seen=this.observe(state,soul,false);
-  const finger=hash(JSON.stringify({stats:seen.stats,topics:seen.topics,ids:[...seen.refs.keys()]}));
+  const finger=hash(JSON.stringify({stats:seen.stats,topics:seen.topics,ids:[...seen.refs.keys()],
+    noteRevisions:state.notes.slice(0,10).map(n=>hash(n.title+' '+n.body)),
+    lessonRevisions:soul.lessons.slice(0,8).map(l=>hash(l.text))}));
   if(force||this.data.fingerprint!==finger){
    const allowed=new Set(seen.refs.keys());let added=0;
    for(const i of soul.initiatives.slice(0,5))
@@ -116,6 +118,9 @@ export class LivingCore{
   const cloud=this.deps.cloud();if(!cloud.apiKey||!cloud.model)return{skipped:'Cloud.ru не настроен'};
   const observed=this.observe(state,soul,this.data.settings.shareRecentText);
   if(!observed.refs.size)return{skipped:'Нет источников'};
+  const fingerprint=hash(JSON.stringify({stats:observed.stats,topics:observed.topics,
+    sources:[...observed.refs]}));
+  if(!forced&&fingerprint===this.data.cloudFingerprint)return{skipped:'С момента прошлого анализа не появилось новых сведений'};
   budget.calls++;this.save(); // reserve even on request failure
   const payload={model:cloud.model,max_tokens:550,temperature:0.2,stream:false,messages:[
    {role:'system',content:'Ты анализируешь подтверждённые события Цукирэй. Предложи максимум 2 улучшения. '+
@@ -143,7 +148,7 @@ export class LivingCore{
    if(this.add(kind,short(p.title,110),short(p.reason,450),evidence,steps,'cloud',new Set(observed.refs.keys())))added++;else rejected++;
   }
   this.data.metrics.cloudRuns++;this.data.metrics.rejectedIdeas+=rejected;
-  this.data.lastCloudAt=new Date().toISOString();this.event('cloud','Проверено идей: '+(added+rejected)+'; сохранено: '+added+'; отклонено: '+rejected);
+  this.data.lastCloudAt=new Date().toISOString();this.data.cloudFingerprint=fingerprint;this.event('cloud','Проверено идей: '+(added+rejected)+'; сохранено: '+added+'; отклонено: '+rejected);
   this.save();return{added,rejected};
  }
  async run(opts:{cloud?:boolean;force?:boolean}={}){
@@ -163,12 +168,17 @@ export class LivingCore{
   if(now-this.lastTick<this.data.settings.intervalMinutes*60000||now-this.lastActivity<this.data.settings.idleMinutes*60000)return;
   this.lastTick=now;await this.run({cloud:this.data.settings.cloudEnabled});
  }
- decide(id:string,action:'approve'|'reject'|'rollback'){return this.queue(()=>{
+ decide(id:string,action:'approve'|'reject'|'rollback'|'verify',note?:unknown){return this.queue(()=>{
   const item=this.data.ideas.find(i=>i.id===id);if(!item)throw Error('Идея не найдена');
   if(action==='approve'){
    if(item.status!=='proposed')throw Error('Уже рассмотрено');
-   item.status=item.kind==='skill'?'verified':'approved';
-   if(item.kind==='skill')this.data.metrics.verifiedSkills++;
+   item.status='approved';
+  }else if(action==='verify'){
+   if(item.kind!=='skill'||item.status!=='approved')throw Error('Нужно сначала одобрить навык');
+   const outcome=short(note,240);
+   if(outcome.length<12||unsafe.test(outcome))throw Error('Укажите конкретный проверенный результат (минимум 12 символов)');
+   item.status='verified';item.verification={method:'owner-confirmation',note:outcome,at:new Date().toISOString()};
+   this.data.metrics.verifiedSkills++;
   }else if(action==='reject'){
    if(item.status!=='proposed')throw Error('Уже рассмотрено');item.status='rejected';
   }else if(action==='rollback'){
