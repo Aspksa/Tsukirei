@@ -27,3 +27,13 @@ jobs:
           if (-not (Test-Path Tsukirei.bat)) { throw 'Tsukirei.bat missing' }
           $text = Get-Content Tsukirei.bat -Raw
           if (-not $text.Trim()) { throw 'Tsukirei.bat empty' }
+
+      - name: Windows BAT execution smoke test (no installation)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & cmd.exe /d /c 'Tsukirei.bat --help'
+          if ($LASTEXITCODE -ne 0) { throw "BAT --help exited with $LASTEXITCODE" }
+          & cmd.exe /d /c 'Tsukirei.bat --diagnose'
+          if ($LASTEXITCODE -ne 0) { throw "BAT --diagnose exited with $LASTEXITCODE" }
+

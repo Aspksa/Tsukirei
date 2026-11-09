@@ -92,9 +92,9 @@ async function refreshBrainGrowth(){
   const events=el('brain-growth-events');
   const review=el('brain-review-list');
   try{
-    const [growth,queue,evidence]=await Promise.all([
+    const [growth,queue,evidence,audit]=await Promise.all([
       api('/api/cognition/growth'),api('/api/cognition/review-queue'),
-      api('/api/cognition/review-evidence')
+      api('/api/cognition/review-evidence'),api('/api/cognition/learning-audit')
     ]);
     const records=Array.isArray(growth.events)?growth.events:[];
     const now=Date.now();
@@ -125,6 +125,16 @@ async function refreshBrainGrowth(){
       review.append(line);
     }
     if(!pending.length)review.textContent='Новых вопросов для проверки нет.';
+    const auditLine=document.createElement('p');
+    auditLine.textContent='Самопроверка за 30 дней: '+(audit.scansCompleted??0)+
+      ' успешных обработок · ошибок: '+(audit.scanErrors??0)+
+      ' · предложенных фактов: '+(audit.findings?.proposedFacts??0);
+    review.append(auditLine);
+    for(const suggestion of (Array.isArray(audit.suggestions)?audit.suggestions:[]).slice(0,4)){
+      const line=document.createElement('p');
+      line.textContent='Рекомендуется: '+String(suggestion);
+      review.append(line);
+    }
   }catch(error){
     summary.textContent='Не удалось загрузить историю: '+(error.message||'ошибка');
     events.replaceChildren();review.textContent='Проверка недоступна.';

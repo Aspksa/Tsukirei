@@ -427,11 +427,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/api/cognition/timeline') {
     json(res,200,{items:cognition.timeline(180)});return;
   }
+  if (method === 'GET' && pathname === '/api/cognition/learning-audit') {
+    json(res,200,cognition.learningAudit());return;
+  }
   if (method === 'GET' && pathname === '/api/cognition/world') {
     const params=new URL(req.url??'/','http://127.0.0.1').searchParams;
     const q=params.get('q')??'';
     const requested=Number(params.get('limit')??70);
-    const limit=Number.isSafeInteger(requested)?Math.min(350,Math.max(1,requested)):70;
+    const limit=Number.isSafeInteger(requested)?Math.min(3000,Math.max(1,requested)):70;
     json(res,200,cognition.world(q,limit));return;
   }
   if (method === 'GET' && pathname === '/api/cognition/hygiene') {
