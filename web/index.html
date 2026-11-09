@@ -51,7 +51,7 @@
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>
-        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.7</span></div>
+        <div class="topbar-right"><span class="live-dot"></span><span id="status-text">Подключение...</span><span class="topbar-local">LOCAL / v0.8</span></div>
       </header>
 
       <main class="main">
@@ -105,7 +105,7 @@
           <div class="page-heading">
             <div><div class="eyebrow"><span class="small-line"></span> RAG ENGINE / LOCAL SEARCH</div>
               <h1 id="search-title">Поиск по <em>памяти.</em></h1>
-              <p>Находите сохранённые знания и документы без дополнительных запросов Cloud.ru.</p>
+              <p>Локальный поиск и индексация. Внешние модели используются только после отдельного разрешения.</p>
             </div>
             <span class="date-chip" id="rag-status">Локальный поиск</span>
           </div>
@@ -138,6 +138,58 @@
                 <button type="submit" class="gold-button"><svg><use href="#i-plus"/></svg> Сохранить документ</button>
                 <div id="rag-import-status" class="rag-feedback" role="status" aria-live="polite"></div>
               </form>
+              <div class="glass-panel rag-engine-panel">
+                <div class="list-heading"><h2>Движок памяти</h2><span id="rag-engine-badge">Локально</span></div>
+                <p id="rag-engine-status" class="rag-hint" role="status">Проверка индекса...</p>
+                <p id="rag-engine-stats" class="rag-hint">Объём и кеш обновляются по запросу.</p>
+                <div class="rag-engine-actions">
+                  <button class="ghost-button" type="button" id="rag-engine-refresh">Статус</button>
+                  <button class="ghost-button" type="button" id="rag-engine-reindex">Пересчитать</button>
+                  <button class="ghost-button" type="button" id="rag-engine-pause">Приостановить</button>
+                </div>
+                <details class="rag-engine-details">
+                  <summary>Контроль качества памяти</summary>
+                  <p class="rag-hint">Флаги дубликатов, возможных конфликтов и старых данных. Никакого автоудаления.</p>
+                  <button class="ghost-button" type="button" id="rag-curator-check">Проверить память</button>
+                  <div id="rag-curator-results" class="rag-diagnostics"></div>
+                </details>
+                <details class="rag-engine-details">
+                  <summary>Граф связей знаний</summary>
+                  <p class="rag-hint">Связи создаются только из явно указанных отношений в тексте и сохраняют источник.</p>
+                  <form id="rag-graph-form" class="rag-graph-form">
+                    <label for="rag-graph-query" class="sr-only">Тема связей</label>
+                    <input type="search" id="rag-graph-query" placeholder="Например: MemOS" minlength="2" maxlength="65" required>
+                    <button type="submit" class="ghost-button">Искать</button>
+                  </form>
+                  <div id="rag-graph-results" class="rag-diagnostics"></div>
+                </details>
+                <details class="rag-engine-details">
+                  <summary>Облачные эмбеддинги и reranking</summary>
+                  <p class="rag-hint">Опциональные платные вызовы через отдельный Cloud.ru ML Inference. По умолчанию выключено, лимит действует на суммарные запросы.</p>
+                  <form id="rag-provider-form" class="rag-provider-form">
+                    <label><input id="rag-embeddings-enabled" type="checkbox"> Включить эмбеддинги для поиска</label>
+                    <label for="rag-provider-endpoint">URL ML Inference (…/v1)</label>
+                    <input id="rag-provider-endpoint" type="url" placeholder="https://…modelrun.inference.cloud.ru/v1" autocomplete="off">
+                    <label for="rag-provider-model">Модель эмбеддингов</label>
+                    <input id="rag-provider-model" type="text" maxlength="150" placeholder="endpoint-selected">
+                    <label for="rag-provider-key">Отдельный API-ключ</label>
+                    <input id="rag-provider-key" type="password" autocomplete="new-password" placeholder="Пусто = оставить прежний">
+                    <label><input id="rag-auto-embed" type="checkbox"> Создавать эмбеддинги в фоне (в пределах лимита)</label>
+                    <div class="subtle-divider"></div>
+                    <label><input id="rag-rerank-enabled" type="checkbox"> Включить внешний reranker</label>
+                    <label for="rag-rerank-endpoint">URL ML Inference reranker</label>
+                    <input id="rag-rerank-endpoint" type="url" placeholder="https://…modelrun.inference.cloud.ru/v1">
+                    <label for="rag-rerank-model">Модель reranker</label>
+                    <input id="rag-rerank-model" maxlength="150" placeholder="endpoint-selected">
+                    <label for="rag-rerank-key">API-ключ reranker</label>
+                    <input id="rag-rerank-key" type="password" autocomplete="new-password" placeholder="Пусто = оставить прежний">
+                    <label for="rag-daily-limit">Максимум внешних AI-запросов в день (1–100)</label>
+                    <input id="rag-daily-limit" type="number" min="1" max="100" value="25">
+                    <button class="gold-button" type="submit">Сохранить подключение</button>
+                    <p id="rag-provider-feedback" class="rag-feedback" role="status"></p>
+                  </form>
+                </details>
+              </div>
               <div class="glass-panel rag-library">
                 <div class="list-heading"><h2>Документы</h2><span id="rag-document-count">0</span></div>
                 <div id="rag-document-list" class="rag-document-list">
