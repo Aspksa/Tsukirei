@@ -28,7 +28,10 @@ function queueRagIndex(){
   ragWorker?.schedule();
 }
 async function askRag(query:string,limit:number,embedding?:number[]){
-  const indexed=Boolean(ragWorker?.status().lastRun);
+  const workerState=ragWorker?.status();
+  // During writes or a background reindex, read directly from the source of truth.
+  // Never answer from an index known to be stale.
+  const indexed=Boolean(workerState?.lastRun&&!workerState.pending&&!workerState.running&&!workerState.error);
   const identifier=sha(JSON.stringify({query,limit,indexed,revision:ragWorker?.generation,
     configured:ragProvider.public().embeddingsEnabled,
     optionalVector:embedding||null}));
