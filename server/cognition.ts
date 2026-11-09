@@ -274,6 +274,27 @@ export class CognitiveCore{
       note:'Только отношения, явно извлечённые из источников и связи утверждённых пользователем целей.'};
   }
   dreams(){return this.data.dreams.slice(0,70);}
+  hygiene(now:Date=new Date()){
+    const timestamp=now.getTime();
+    const maxAge=180*24*60*60*1000;
+    const confirmed=this.data.facts.filter(f=>f.status==='confirmed');
+    const groups=new Map<string,Fact[]>();
+    for(const fact of confirmed)groups.set(fact.key,[...(groups.get(fact.key)||[]),fact]);
+    const conflicts=[...groups].flatMap(([key,facts])=>{
+      const values=new Set(facts.map(f=>f.value.trim().toLowerCase()));
+      return values.size>1?[{key,sourceIds:[...new Set(facts.map(f=>f.sourceId))],
+        factIds:facts.map(f=>f.id),values:[...new Set(facts.map(f=>f.value))]}]:[];
+    }).slice(0,100);
+    const stale=confirmed.filter(f=>{
+      const date=Date.parse(f.observedAt);
+      return Number.isFinite(date)&&timestamp-date>maxAge;
+    }).slice(0,100).map(f=>({id:f.id,key:f.key,sourceId:f.sourceId,observedAt:f.observedAt}));
+    const missing=this.data.facts.filter(f=>f.status==='source_missing').slice(0,100)
+      .map(f=>({id:f.id,key:f.key,sourceId:f.sourceId}));
+    return {checkedAt:now.toISOString(),thresholdDays:180,conflicts,stale,missing,
+      duplicateGroups:this.dreams(),automaticDeletion:false,automaticConfirmation:false};
+  }
+
   async scan(force=false){
     if(this.busy)return {skipped:'Идёт другая локальная проверка'};
     this.busy=true;const t=Date.now();
