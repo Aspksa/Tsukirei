@@ -103,6 +103,35 @@ export class LivingCore{
     if(this.add('critique','Проверить вывод по замечанию владельца',
       'Получена обратная связь; правильность исправления требует подтверждения.',
       ['lesson:'+l.id],[],'local',allowed))added++;
+   // Dream Memory: detect duplicated sources without deleting the original notes.
+   const copies=new Map<string,string>();
+   for(const note of state.notes.slice(0,250)){
+     const normalized=(note.title+' '+note.body).toLowerCase().replace(/\s+/g,' ').trim();
+     if(normalized.length<35)continue;
+     const key=hash(normalized),previous=copies.get(key);
+     if(previous){
+       if(this.add('reflection','Проверить повторяющиеся заметки',
+         'Две сохранённые заметки имеют одинаковое содержимое. Предлагаю проверить, нужны ли обе записи.',
+         ['note:'+previous,'note:'+note.id],[],'local',new Set(['note:'+previous,'note:'+note.id])))added++;
+     }else copies.set(key,note.id);
+   }
+   // Evolution supervisor: revoke a recommendation when every cited source disappears.
+   const exists=(ref:string)=>{
+     const [kind,id]=[ref.slice(0,ref.indexOf(':')),ref.slice(ref.indexOf(':')+1)];
+     if(kind==='note')return state.notes.some(x=>x.id===id);
+     if(kind==='task')return state.tasks.some(x=>x.id===id);
+     if(kind==='chat')return state.messages.some(x=>x.id===id);
+     if(kind==='lesson')return soul.lessons.some(x=>x.id===id);
+     if(kind==='initiative')return soul.initiatives.some(x=>x.id===id);
+     return false;
+   };
+   for(const idea of this.data.ideas){
+     if(idea.kind==='skill'&&idea.status==='verified'&&idea.evidence.some(ref=>!exists(ref))){
+       idea.status='rolled_back';idea.revision++;
+       this.data.metrics.verifiedSkills=Math.max(0,this.data.metrics.verifiedSkills-1);
+       this.event('rollback','Подтверждающий источник навыка больше не доступен: '+idea.title);
+     }
+   }
    this.data.fingerprint=finger;this.data.lastScanAt=new Date().toISOString();
    this.data.metrics.localRuns++;this.data.lastSummary='Заметок: '+state.notes.length+
      '; открытых задач: '+seen.stats.openTasks+'; уроков: '+soul.lessons.length+'; предложений: '+added+'.';
