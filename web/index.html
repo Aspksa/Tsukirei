@@ -91,6 +91,12 @@
         </section>
         <section class="page" id="page-brain" hidden aria-labelledby="brain-title">
           <div class="page-heading"><div><h1 id="brain-title">Мозг <em>Цукирэй.</em></h1><p>Память, знания, личность и развитие в одном пространстве.</p></div></div>
+          <section class="glass-panel rag-studio" aria-labelledby="rag-studio-title">
+            <div class="brain-live-header"><div><div class="panel-kicker">KNOWLEDGE ENGINE / RAG</div><h2 id="rag-studio-title">Движок памяти</h2><p class="rag-studio-subtitle">Состояние поиска, индекса и кэша без раскрытия личных записей.</p></div><button class="ghost-button" type="button" id="rag-studio-refresh">Обновить RAG</button></div>
+            <div id="rag-studio-status" class="rag-studio-status" role="status" aria-live="polite">Загрузка состояния RAG…</div>
+            <div id="rag-studio-metrics" class="rag-studio-metrics" aria-label="Показатели движка памяти"></div>
+            <p class="rag-studio-note">Индексация доступна при PostgreSQL. Если индекс недоступен или обновляется, поиск использует актуальные данные вместо устаревшего индекса.</p>
+          </section>
           <div class="glass-panel brain-live" aria-label="Живая карта памяти">
             <div class="brain-live-header"><div><div class="panel-kicker">ЛОКАЛЬНЫЕ ДАННЫЕ · БЕЗ ОБЛАЧНЫХ ЗАПРОСОВ</div><h2>Карта роста знаний</h2></div><button class="ghost-button" type="button" id="brain-refresh">Обновить</button></div>
             <div class="brain-metrics" id="brain-metrics" aria-live="polite">Загрузка сведений...</div>
