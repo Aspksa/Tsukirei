@@ -34,7 +34,9 @@ function queueRagIndex(){
   ragCache.clear();
   ragWorker?.schedule();
 }
-async function askRag(query:string,limit:number,embedding?:number[]){
+async function askRag(query:string,limit:number,embedding?:number[],traceId?:string){
+  const measured=async <T>(stage:string,target:string,operation:()=>Promise<T>):Promise<T> =>
+    traceId?monitorStage(traceId,stage,target,operation):operation();
   const workerState=ragWorker?.status();
   // During writes or a background reindex, read directly from the source of truth.
   // Never answer from an index known to be stale.
@@ -43,26 +45,26 @@ async function askRag(query:string,limit:number,embedding?:number[]){
     configured:ragProvider.public().embeddingsEnabled,
     optionalVector:embedding||null}));
   const found=ragCache.get(identifier);
-  if(found)return {...found,cached:true};
+  if(found){if(traceId)monitorRecord(traceId,'Кэш памяти','RagCache.get() → попадание','ok',performance.now());return {...found,cached:true};}
   let vector=embedding;
   let model:string|undefined;
   const canReuseVectors=Boolean(database&&ragProvider.public().embeddingsEnabled&&
     await database.ragVectorCount(ragProvider.model)>0);
   if(!vector&&canReuseVectors){
     try{
-      const generated=await ragProvider.embed(query);
+      const generated=await measured('Векторизация запроса','ragProvider.embed() → embeddings API',()=>ragProvider.embed(query));
       if(generated){vector=generated.vector;model=generated.model;}
     }catch(error){
       console.warn('[RAG] Embedding недоступен; использую локальный поиск:',
         error instanceof Error?error.message:String(error));
     }
   }
-  const state=indexed?emptyState():await readState();
-  const retrieved=await retrieveRag(query,state,database,Math.max(limit,12),vector,model,indexed);
+  const state=indexed?emptyState():await measured('Чтение для поиска',database?'database.read() → PostgreSQL':'readLegacyState() → локальный JSON',()=>readState());
+  const retrieved=await measured('Поиск по знаниям',indexed?'retrieveRag() → готовый индекс':'retrieveRag() → актуальное хранилище',()=>retrieveRag(query,state,database,Math.max(limit,12),vector,model,indexed));
   let ordered=rerankLocal(query,retrieved.hits,limit);
   if(ordered.length>=2&&ragProvider.public().rerankEnabled){
     try{
-      const scores=await ragProvider.rerank(query,ordered.map(item=>item.title+'\n'+item.content));
+      const scores=await measured('Ранжирование','ragProvider.rerank() → reranker API',()=>ragProvider.rerank(query,ordered.map(item=>item.title+'\n'+item.content)));
       if(scores)ordered=ordered.map((hit,i)=>({hit,i,score:scores[i]}))
         .sort((a,b)=>b.score-a.score||a.i-b.i).map(row=>row.hit);
     }catch(error){
@@ -230,7 +232,7 @@ async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
     living.touch();
     const state = await monitorStage(traceId,'Чтение истории',database ? 'database.read() → PostgreSQL' : 'readLegacyState() → локальный JSON',()=>readState());
     const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
-    const retrieved = useMemory ? await monitorStage(traceId,'Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5))
+    const retrieved = useMemory ? await monitorStage(traceId,'Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5,undefined,traceId))
       : {hits:[],mode:'lexical',cached:false};
     const grounded = useMemory ? smartContext(prompt,retrieved.hits) : {hits:[],context:'',budget:0};
     const context=grounded.context;

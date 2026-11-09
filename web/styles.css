@@ -616,3 +616,9 @@ img,svg,video,canvas{max-width:100%}
 /* Storage backend provenance: measured execution branch, never guessed */
 .monitor-graph-node .monitor-graph-backend{display:inline-flex;align-items:center;align-self:flex-start;border:1px solid #8d7899;background:#2a2039;border-radius:999px;padding:3px 8px;font-size:10px;letter-spacing:.02em;color:#f0d5a0}
 .monitor-graph-node[data-ok="false"] .monitor-graph-backend{border-color:#bf7382}
+
+/* Distinct RAG provenance in confirmed execution traces */
+.monitor-graph-node[data-kind="rag"]{background:linear-gradient(140deg,#273c48,#1d2532);border-color:#6999a6}
+.monitor-graph-node[data-kind="rag"] strong{color:#bde6eb}
+.monitor-graph-node[data-kind="rag"][aria-pressed="true"]{border-color:#d2f5f3;box-shadow:0 0 0 2px #89d6df44}
+.monitor-graph-node[data-kind="rag"][data-ok="false"]{border-color:#bf7382}
