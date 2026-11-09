@@ -187,7 +187,7 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   t.after(() => second.child.kill());
   const persisted = await api(second.base, '/api/state');
   assert.equal(persisted.data.tasks.length, 12);
-  assert.equal(persisted.data.notes.length, 1);
+  assert.equal(persisted.data.notes.length, 4, 'Three curator test notes should persist across restart');
   const docsAfterRestart=await api(second.base,'/api/rag/documents');
   assert.equal(docsAfterRestart.status,200);
   assert.ok(docsAfterRestart.data.items.some(doc=>doc.id===persistent.data.document.id));
