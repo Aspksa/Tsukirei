@@ -482,14 +482,17 @@ function renderTasks() {
 }
 let chatScrollPinned=false;
 let chatSearchMatches=[],chatSearchIndex=0;
-function applyChatSearch(){
+function applyChatSearch({navigate=false}={}){
  const query=el('chat-search-input').value.trim().toLocaleLowerCase('ru-RU');
  const nodes=[...el('chat-thread').querySelectorAll('.message p')];
  chatSearchMatches=[];
  nodes.forEach(node=>{
-  const original=node.textContent;node.replaceChildren();
+  // Preserve the original text rather than repeatedly searching highlighted markup.
+  const original=node.textContent;
+  node.replaceChildren();
   if(!query){node.textContent=original;return}
-  const lower=original.toLocaleLowerCase('ru-RU');let offset=0,at;
+  const lower=original.toLocaleLowerCase('ru-RU');
+  let offset=0,at;
   while((at=lower.indexOf(query,offset))!==-1){
    node.append(document.createTextNode(original.slice(offset,at)));
    const mark=document.createElement('mark');mark.textContent=original.slice(at,at+query.length);
@@ -498,15 +501,20 @@ function applyChatSearch(){
   node.append(document.createTextNode(original.slice(offset)));
  });
  if(chatSearchIndex>=chatSearchMatches.length)chatSearchIndex=0;
- updateChatSearchSelection();
+ updateChatSearchSelection({navigate});
 }
-function updateChatSearchSelection(){
+function updateChatSearchSelection({navigate=true}={}){
  chatSearchMatches.forEach((mark,i)=>mark.classList.toggle('current',i===chatSearchIndex));
  const count=el('chat-search-count'),query=el('chat-search-input').value.trim();
  count.textContent=!query?'Введите запрос':chatSearchMatches.length?(chatSearchIndex+1)+' из '+chatSearchMatches.length:'Совпадений нет';
  el('chat-search-prev').disabled=!chatSearchMatches.length;
  el('chat-search-next').disabled=!chatSearchMatches.length;
- if(chatSearchMatches.length&&query)chatSearchMatches[chatSearchIndex].scrollIntoView({block:'center',behavior:'instant'});
+ if(navigate&&chatSearchMatches.length&&query){
+  const mark=chatSearchMatches[chatSearchIndex];
+  const list=el('chat-thread');
+  const target=mark.getBoundingClientRect().top-list.getBoundingClientRect().top+list.scrollTop-list.clientHeight/2;
+  list.scrollTo({top:Math.max(0,target),behavior:'instant'});
+ }
 }
 function moveChatSearch(direction){
  if(!chatSearchMatches.length)return;
@@ -545,7 +553,7 @@ function renderChat() {
     discuss.type='button';
     discuss.addEventListener('click',()=>{
       el('chat-input').value='Давай обсудим: '+suggestion.title;
-      el('chat-input').focus();
+      el('chat-input').focus();updateChatCounter();
       proactiveSuggestions=proactiveSuggestions.filter(x=>x.id!==suggestion.id);
       renderChat();
     });
@@ -597,7 +605,7 @@ function renderChat() {
   if(chatScrollPinned&&list.dataset.rendered)list.scrollTop=Math.max(0,previousScroll+list.scrollHeight-previousHeight);
   else list.scrollTop=list.scrollHeight;
   list.dataset.rendered='true';
-  if(!el('chat-search').hidden)applyChatSearch();
+  if(!el('chat-search').hidden)applyChatSearch({navigate:false});
   updateChatJump();
 }
 function render() { renderCounts(); renderNotes(); renderTasks(); renderStatus(); renderChat(); }
@@ -671,10 +679,10 @@ el('chat-toggle').addEventListener('click', () => toggleChat(el('chat-panel').hi
 el('chat-search-toggle').addEventListener('click',()=>{
  const search=el('chat-search'),open=search.hidden;search.hidden=!open;
  el('chat-search-toggle').setAttribute('aria-expanded',String(open));
- if(open){el('chat-search-input').focus();applyChatSearch()}
+ if(open){el('chat-search-input').focus();applyChatSearch({navigate:false})}
  else{el('chat-search-input').value='';applyChatSearch();el('chat-input').focus()}
 });
-el('chat-search-input').addEventListener('input',()=>{chatSearchIndex=0;applyChatSearch()});
+el('chat-search-input').addEventListener('input',()=>{chatSearchIndex=0;applyChatSearch({navigate:true})});
 el('chat-search-prev').addEventListener('click',()=>moveChatSearch(-1));
 el('chat-search-next').addEventListener('click',()=>moveChatSearch(1));
 el('chat-search-input').addEventListener('keydown',event=>{
