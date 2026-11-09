@@ -42,7 +42,7 @@ const HINTS:Array<{topic:string;pattern:RegExp;title:string;reason:string}>=[
   {topic:'поиск',pattern:/\b(не\s+находит|не\s+помнит|плохой\s+поиск|забыл[ао]?|не\s+вспоминает)/iu,
     title:'Проверить качество поиска памяти',reason:'Проблемы поиска упоминались несколько раз. Предлагаю проверить выдачу RAG на сохранённых вопросах.'}
 ];
-const BEHAVIOR_INJECTION=/\b(ignore|system prompt|developer message|jailbreak|отмени\s+все\s+правила|игнорируй\s+инструкции|раскрой\s+ключ|секретный\s+ключ)\b/iu;
+const BEHAVIOR_INJECTION=/(?:ignore\s+(?:all|previous|system)|system\s*prompt|developer\s*message|jailbreak|отмени\s+все\s+правила|игнорируй\s+(?:инструкции|правила)|раскрой\s+(?:ключ|секрет)|секретный\s+ключ)/iu;
 function bounded(value:unknown,max:number,label:string) {
   if(typeof value!=='string'||!value.trim()||value.trim().length>max)
     throw new Error(label+': требуется текст длиной 1–'+max);
@@ -208,6 +208,23 @@ export class SoulEngine {
       if(!item)throw new Error('Предпочтение не найдено');
       this.data.preferences=this.data.preferences.filter(p=>p.id!==id);
       this.journal('preference','Предпочтение удалено владельцем');
+      return true;
+    });
+  }
+  deleteLesson(id:string){
+    return this.modify(()=>{
+      const item=this.data.lessons.find(x=>x.id===id);
+      if(!item)throw new Error('Урок не найден');
+      this.data.lessons=this.data.lessons.filter(x=>x.id!==id);
+      this.journal('reflection','Урок удалён владельцем');
+      return true;
+    });
+  }
+  reset(confirm:unknown){
+    if(confirm!=='RESET_SOUL')throw new Error('Для сброса укажите RESET_SOUL');
+    return this.modify(()=>{
+      // No chat transcript, notes, files or RAG data are touched.
+      this.data=empty();
       return true;
     });
   }
