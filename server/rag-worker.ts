@@ -10,7 +10,7 @@ export type RagDatabase={
   ragInspect(limit?:number):Promise<SourceDoc[]>;
   ragGraph(term:string,limit?:number):Promise<unknown[]>;
   ragIndexStats():Promise<{records:number;relations:number}>;
-  ragPendingVectors(limit:number):Promise<Array<{key:string;checksum:string;content:string}>>;
+  ragPendingVectors(limit:number,model:string):Promise<Array<{key:string;checksum:string;content:string}>>;
   ragSaveVector(key:string,checksum:string,model:string,embedding:number[]):Promise<boolean>;
 };
 export class RagWorker {
@@ -99,7 +99,7 @@ export class RagWorker {
       this.indexingStage='Готово';
       if(this.provider.autoEmbed&&!this.paused){
         this.indexingStage='Эмбеддинги по разрешению пользователя';
-        const pending=await this.db.ragPendingVectors(20);
+        const pending=await this.db.ragPendingVectors(20,this.provider.model);
         for(const item of pending){
           if(this.paused||this.stopped||this.pending)break;
           try{
