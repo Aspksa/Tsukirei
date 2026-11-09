@@ -13,6 +13,7 @@ import { LivingCore } from './living.ts';
 import { CognitiveCore, assessEvidence } from './cognition.ts';
 import { SuperMind, assessIntent } from './supermind.ts';
 import { BackgroundScheduler } from './background-scheduler.ts';
+import { IdentityCore, LearningCore } from './unified-cores.ts';
 
 type CloudSettings = { apiKey: string; model: string };
 type Json = Record<string, unknown>;
@@ -112,12 +113,14 @@ const living=new LivingCore(dataDir,{
 const supermind=new SuperMind(dataDir,{
   read:readState,soul:()=>soul.overview(),cognitive:cognition,living
 });
+const identity=new IdentityCore(soul,supermind);
+const learning=new LearningCore(living,cognition);
 // Coordinate maintenance without overlapping runs or additional cloud calls.
 const background=new BackgroundScheduler();
 background.add({name:'knowledge-check',intervalMs:30*60*1000,run:async()=>{
   if(cloudBusy)return;
-  await cognition.scan();
-  await supermind.scan();
+  await learning.verify();
+  await identity.refresh();
 }});
 background.add({name:'rag-index-watch',intervalMs:5*60*1000,run:()=>{ragWorker?.schedule();}});
 function readCloud(): CloudSettings {
@@ -207,8 +210,8 @@ async function chat(prompt: string, useMemory = true) {
       catch(error){console.warn('[Cognition] Не удалось записать пробел знаний:',error);}
     }
     const messages = [
-      {role:'system',content:soul.prompt(useMemory)+
-        (useMemory?'\n'+living.prompt()+'\n'+cognition.prompt()+'\n'+supermind.prompt():'')+'\n'+
+      {role:'system',content:identity.prompt(useMemory)+
+        (useMemory?'\n'+learning.prompt():'')+'\n'+
         (assessment&&assessment.level==='insufficient'?
           'Локальные источники плохо покрывают вопрос; явно отделяй гипотезы от проверенных сведений.\n':'')+
         'Ты Цукирэй, полезная персональная ИИ-помощница. Отвечай по-русски. '+
