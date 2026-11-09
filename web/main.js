@@ -159,6 +159,7 @@ function go(page) {
     }
   });
   el('topbar-section').textContent = pages[page];
+  if(page==='monitor')void refreshMonitorServerSteps();
   // The five-item sidebar stays on Brain while a legacy subsystem is open.
   const brainPages = new Set(['brain','memory','search','soul','living','cognition','supermind']);
   const brainNav = document.querySelector('.nav-button[data-page="brain"]');
@@ -757,6 +758,35 @@ function setMobileMenu(open){
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
 }
+async function refreshMonitorServerSteps(){
+ const list=el('monitor-server-steps');
+ list.replaceChildren();
+ const loading=document.createElement('p');loading.className='brain-trace-empty';loading.textContent='Загрузка этапов…';list.append(loading);
+ try{
+  const result=await api('/api/monitor/steps');
+  list.replaceChildren();
+  const items=Array.isArray(result.items)?result.items.slice(-60).reverse():[];
+  if(!items.length){
+   const empty=document.createElement('p');empty.className='brain-trace-empty';
+   empty.textContent='Пока нет этапов. Отправьте сообщение в чат, затем обновите.';
+   list.append(empty);return;
+  }
+  for(const item of items){
+   const row=document.createElement('div');row.className='monitor-server-step';
+   const stage=document.createElement('strong');stage.textContent=String(item.stage||'Этап');
+   const target=document.createElement('code');target.textContent=String(item.target||'');
+   const detail=document.createElement('span');detail.textContent=String(item.durationMs)+' мс · '+new Date(item.at).toLocaleTimeString('ru-RU')+' · '+(item.status==='ok'?'Успешно':'Ошибка');
+   detail.dataset.ok=String(item.status==='ok');
+   row.append(stage,target,detail);list.append(row);
+  }
+ }catch(error){
+  list.replaceChildren();
+  const message=document.createElement('p');message.className='brain-trace-empty';
+  message.textContent='Не удалось получить этапы сервера: '+(error.message||'ошибка');
+  list.append(message);
+ }
+}
+el('monitor-server-refresh').addEventListener('click',refreshMonitorServerSteps);
 el('monitor-filter').addEventListener('change',renderBrainRequestTrace);
 el('brain-trace-clear').addEventListener('click',()=>{brainRequestTrace.length=0;renderBrainRequestTrace();});
 el('mobile-menu').addEventListener('click',()=>{
