@@ -139,3 +139,13 @@ test('chat request trace IDs correlate browser and server stages',()=>{
  assert.match(main,/item\.traceId===selected/);
  assert.match(css,/\.monitor-trace-picker\{/);
 });
+
+test('monitor trace graph uses actual server stage items and accessible buttons',()=>{
+ assert.match(app,/id="monitor-trace-graph"/);
+ assert.match(app,/id="monitor-graph-detail"[^>]*aria-live="polite"/);
+ assert.match(main,/function renderMonitorTraceGraph\(items\)/);
+ assert.match(main,/renderMonitorTraceGraph\(items\)/);
+ assert.match(main,/button\.setAttribute\('aria-pressed','false'\)/);
+ assert.match(main,/chain\.sort\(\(a,b\)=>Number\(a\.id\)-Number\(b\.id\)\)/);
+ assert.match(css,/\.monitor-graph-node:focus-visible/);
+});
