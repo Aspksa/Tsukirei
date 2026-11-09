@@ -784,9 +784,48 @@ async function refreshMonitorServerSteps(){
   list.append(message);
  }
 }
+function renderMonitorTraceGraph(items){
+ const graph=el('monitor-trace-graph'),detail=el('monitor-graph-detail');
+ graph.replaceChildren();
+ detail.textContent='Выберите узел графа, чтобы увидеть подтверждённые метаданные операции.';
+ if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Пока нет зарегистрированных этапов для графа.';graph.append(empty);return;}
+ const grouped=new Map();
+ for(const item of items){
+  const id=String(item.traceId||'unknown');
+  if(!grouped.has(id))grouped.set(id,[]);
+  grouped.get(id).push(item);
+ }
+ const groups=[...grouped.values()].reverse();
+ for(const chain of groups){
+  chain.sort((a,b)=>Number(a.id)-Number(b.id));
+  const section=document.createElement('section');section.className='monitor-graph-chain';
+  const heading=document.createElement('div');heading.className='monitor-graph-chain-title';
+  heading.textContent='Цепочка '+String(chain[0].traceId||'без ID').slice(0,8)+' · '+chain.length+' этапов';
+  section.append(heading);
+  const track=document.createElement('div');track.className='monitor-graph-track';
+  for(let i=0;i<chain.length;i++){
+   const item=chain[i];
+   if(i>0){const arrow=document.createElement('span');arrow.className='monitor-graph-arrow';arrow.textContent='→';arrow.setAttribute('aria-hidden','true');track.append(arrow);}
+   const button=document.createElement('button');button.type='button';button.className='monitor-graph-node';
+   button.dataset.ok=String(item.status==='ok');
+   const name=document.createElement('strong');name.textContent=String(item.stage||'Этап');
+   const time=document.createElement('span');time.textContent=String(item.durationMs)+' мс';
+   button.append(name,time);
+   button.addEventListener('click',()=>{
+    graph.querySelectorAll('.monitor-graph-node').forEach(node=>node.setAttribute('aria-pressed','false'));
+    button.setAttribute('aria-pressed','true');
+    detail.textContent=String(item.stage||'Этап')+' · '+String(item.target||'')+' · '+String(item.durationMs)+' мс · '+(item.status==='ok'?'Успешно':'Ошибка')+' · '+new Date(item.at).toLocaleString('ru-RU');
+   });
+   button.setAttribute('aria-pressed','false');
+   track.append(button);
+  }
+  section.append(track);graph.append(section);
+ }
+}
 function renderMonitorServerSteps(){
  const list=el('monitor-server-steps'),selected=el('monitor-trace-select').value;
  const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
+ renderMonitorTraceGraph(items);
  list.replaceChildren();
  el('monitor-trace-count').textContent=items.length+' этапов';
  if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Нет этапов для выбранной цепочки. Отправьте сообщение и обновите.';list.append(empty);return;}
