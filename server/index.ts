@@ -894,6 +894,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
     staticFile(res, join(root, 'web', 'index.html'), 'text/html; charset=utf-8'); return;
   }
+  if (method === 'GET' && pathname === '/studio.html') {
+    staticFile(res, join(root, 'web', 'studio.html'), 'text/html; charset=utf-8'); return;
+  }
   if (method === 'GET' && pathname === '/styles.css') {
     staticFile(res, join(root, 'web', 'styles.css'), 'text/css; charset=utf-8'); return;
   }
