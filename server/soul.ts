@@ -80,6 +80,14 @@ export function parseExplicitPreference(message:string):string|null {
   if(result.length<5||BEHAVIOR_INJECTION.test(result))return null;
   return result;
 }
+export function parseSuggestedPreference(message:string):string|null {
+  const text=String(message).trim().slice(0,1200);
+  // Ordinary declarations become proposals, never confirmed system context.
+  const match=text.match(/^(я\s+предпочитаю|мне\s+нравится|мне\s+удобнее|не\s+называй\s+меня|обращайся\s+ко\s+мне)\s+([^\r\n]{5,220})/iu);
+  if(!match)return null;
+  const candidate=(match[1]+' '+match[2]).replace(/[.!?]+$/,'').trim();
+  return candidate.length<=240&&!BEHAVIOR_INJECTION.test(candidate)?candidate:null;
+}
 export function renderPersona(settings:SoulSettings,preferences:Preference[],lessons:Lesson[],withMemory=true):string {
   const tone={
     'нежный':'мягкий, внимательный, тёплый, слегка игривый',
@@ -236,10 +244,13 @@ export class SoulEngine {
       this.data.metrics.chatsObserved++;
       if(this.data.settings.reflectionsEnabled){
         const explicit=parseExplicitPreference(prompt);
-        if(explicit&&!this.data.preferences.some(p=>p.text.toLowerCase()===explicit.toLowerCase())){
-          const pref:Preference={id:randomUUID(),text:explicit,status:'confirmed',source:'chat:'+id,createdAt:new Date().toISOString()};
+        const suggested=explicit?null:parseSuggestedPreference(prompt);
+        const found=explicit??suggested;
+        if(found&&!this.data.preferences.some(p=>p.text.toLowerCase()===found.toLowerCase())){
+          const status:PreferenceStatus=explicit?'confirmed':'suggested';
+          const pref:Preference={id:randomUUID(),text:found,status,source:'chat:'+id,createdAt:new Date().toISOString()};
           this.data.preferences=unique(this.data.preferences,pref,MAX_PREFERENCES);
-          this.journal('preference','Владелец попросил запомнить: '+explicit.slice(0,150),'chat:'+id);
+          this.journal('preference',(explicit?'Владелец попросил запомнить: ':'Предложено проверить: ')+found.slice(0,150),'chat:'+id);
         }
         for(const category of HINTS){
           if(category.pattern.test(prompt))
