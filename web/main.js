@@ -177,6 +177,7 @@ async function refreshBrainOverview(){
   }finally{brainLoading=false;}
 }
 el('brain-refresh').addEventListener('click',()=>{void refreshBrainOverview();void refreshBrainGrowth();});
+let selectedBrainTopic=null;
 async function refreshBrainKnowledge(){
   const svg=el('brain-map-svg');
   const detail=el('brain-graph-detail');
@@ -184,8 +185,48 @@ async function refreshBrainKnowledge(){
   detail.textContent='Загружаю связи с указанием источников...';
   try{
     const graph=await api('/api/cognition/world'+(query?'?q='+encodeURIComponent(query):''));
-    const allNodes=Array.isArray(graph.nodes)?graph.nodes.slice(0,70):[];
-    const allEdges=Array.isArray(graph.edges)?graph.edges.slice(0,140):[];
+    const rawNodes=Array.isArray(graph.nodes)?graph.nodes.slice(0,180):[];
+    const rawEdges=Array.isArray(graph.edges)?graph.edges.slice(0,150):[];
+    const neighbors=new Map(rawNodes.map(n=>[String(n.id),new Set()]));
+    for(const edge of rawEdges){
+      const a=String(edge.from),b=String(edge.to);
+      if(neighbors.has(a)&&neighbors.has(b)){
+        neighbors.get(a).add(b);neighbors.get(b).add(a);
+      }
+    }
+    const visited=new Set(),topics=[];
+    for(const node of rawNodes){
+      const id=String(node.id);
+      if(visited.has(id))continue;
+      const group=[],stack=[id];visited.add(id);
+      while(stack.length){
+        const current=stack.pop();group.push(current);
+        for(const next of neighbors.get(current)||[]){
+          if(!visited.has(next)){visited.add(next);stack.push(next);}
+        }
+      }
+      topics.push(group);
+    }
+    topics.sort((a,b)=>b.length-a.length);
+    if(selectedBrainTopic!==null&&!topics[selectedBrainTopic])selectedBrainTopic=null;
+    const topicBar=el('brain-topic-groups');
+    topicBar.replaceChildren();
+    const topicButton=(label,index)=>{
+      const button=document.createElement('button');
+      button.type='button';button.className='brain-topic-button';
+      button.textContent=label;button.setAttribute('aria-pressed',String(selectedBrainTopic===index));
+      button.addEventListener('click',()=>{selectedBrainTopic=index;void refreshBrainKnowledge();});
+      topicBar.append(button);
+    };
+    topicButton('Все · '+rawNodes.length,null);
+    for(let i=0;i<Math.min(topics.length,12);i++){
+      const first=rawNodes.find(n=>String(n.id)===topics[i][0]);
+      topicButton(String(first?.label||'Тема '+(i+1)).slice(0,24)+' · '+topics[i].length,i);
+    }
+    const visibleIds=selectedBrainTopic===null?null:new Set(topics[selectedBrainTopic]);
+    const allNodes=rawNodes.filter(n=>!visibleIds||visibleIds.has(String(n.id))).slice(0,70);
+    const included=new Set(allNodes.map(n=>String(n.id)));
+    const allEdges=rawEdges.filter(e=>included.has(String(e.from))&&included.has(String(e.to)));
     const nodes=allNodes.map((node,i)=>({
       id:String(node.id),label:String(node.label||node.id).slice(0,90),
       x:350+Math.cos(i*2.399963)*Math.sqrt((i+.5)/Math.max(allNodes.length,1))*295,
@@ -250,9 +291,9 @@ async function refreshBrainKnowledge(){
     el('brain-footnote').textContent='Граф строится из локально сохранённых связей Cognitive Core. Cloud.ru не вызывается.';
   }catch(error){detail.textContent='Не удалось загрузить граф: '+(error.message||'ошибка');}
 }
-el('brain-graph-search').addEventListener('click',()=>{void refreshBrainKnowledge();});
+el('brain-graph-search').addEventListener('click',()=>{selectedBrainTopic=null;void refreshBrainKnowledge();});
 el('brain-graph-query').addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();void refreshBrainKnowledge();}});
-el('brain-graph-overview').addEventListener('click',()=>{el('brain-map-svg').setAttribute('viewBox','0 0 700 230');void refreshBrainOverview();});
+el('brain-graph-overview').addEventListener('click',()=>{selectedBrainTopic=null;el('brain-map-svg').setAttribute('viewBox','0 0 700 230');void refreshBrainOverview();});
 
 function renderStatus() {
   const settings = viewState.settings;
