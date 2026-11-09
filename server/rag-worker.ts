@@ -31,11 +31,13 @@ export class RagWorker {
   private db:RagDatabase;
   private provider:RagProvider;
   private invalidated:()=>void;
-  constructor(db:RagDatabase,provider:RagProvider,invalidated:()=>void){
+  constructor(db:RagDatabase,provider:RagProvider,invalidated:()=>void,periodic=true){
     this.db=db;this.provider=provider;this.invalidated=invalidated;
     this.schedule();
-    this.periodic=setInterval(()=>this.schedule(),5*60*1000);
-    this.periodic.unref?.();
+    if(periodic){
+      this.periodic=setInterval(()=>this.schedule(),5*60*1000);
+      this.periodic.unref?.();
+    }
   }
   get generation(){return this.revision;}
   status(){
