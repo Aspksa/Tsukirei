@@ -38,7 +38,7 @@
   </svg>
 
   <div class="shell" id="shell">
-    <aside class="sidebar" aria-label="Навигация">
+    <aside class="sidebar" id="app-sidebar" aria-label="Навигация">
       <button class="brand" data-page="home" aria-label="Цукирэй — главная"><span class="brand-star">✦</span></button>
       <div class="side-separator"></div>
       <nav class="nav" aria-label="Разделы">
@@ -55,7 +55,7 @@
     <div class="workspace">
       <header class="topbar">
         <div class="heading-left">
-          <button class="icon-button mobile-menu" id="mobile-menu" aria-label="Открыть меню"><svg><use href="#i-menu"/></svg></button>
+          <button class="icon-button mobile-menu" id="mobile-menu" aria-label="Открыть меню" aria-controls="app-sidebar" aria-expanded="false"><svg><use href="#i-menu"/></svg></button>
           <div class="wordmark">TSUKIREI <span class="wordmark-dot">✦</span></div>
           <span class="topbar-divider"></span><span class="topbar-section" id="topbar-section">Обзор</span>
         </div>

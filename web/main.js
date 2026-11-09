@@ -87,6 +87,8 @@ function go(page) {
     else brainNav.removeAttribute('aria-current');
   }
   el('shell').classList.remove('menu-open');
+  el('mobile-menu').setAttribute('aria-expanded','false');
+  el('mobile-menu').setAttribute('aria-label','Открыть меню');
   if (window.location.hash !== '#' + page) window.location.hash = page;
   if (page === 'brain') { void refreshBrainKnowledge(); void refreshBrainGrowth(); }
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
@@ -617,7 +619,25 @@ window.addEventListener('hashchange',()=>{
   go(Object.hasOwn(pages,target)?target:'home');
 });
 el('orb-open').addEventListener('click', () => go('memory'));
-el('mobile-menu').addEventListener('click', () => el('shell').classList.toggle('menu-open'));
+function setMobileMenu(open){
+ el('shell').classList.toggle('menu-open',open);
+ el('mobile-menu').setAttribute('aria-expanded',String(open));
+ el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
+}
+el('mobile-menu').addEventListener('click',()=>setMobileMenu(!el('shell').classList.contains('menu-open')));
+document.addEventListener('pointerdown',event=>{
+ if(!el('shell').classList.contains('menu-open'))return;
+ if(event.target.closest('#app-sidebar, #mobile-menu'))return;
+ setMobileMenu(false);
+});
+document.addEventListener('keydown',event=>{
+ if(event.key!=='Escape'||!el('shell').classList.contains('menu-open'))return;
+ setMobileMenu(false);
+ el('mobile-menu').focus();
+});
+window.matchMedia('(min-width: 521px)').addEventListener('change',event=>{
+ if(event.matches)setMobileMenu(false);
+});
 el('today').textContent = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
 el('note-form').addEventListener('submit', event => {

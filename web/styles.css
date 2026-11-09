@@ -506,3 +506,15 @@ img,svg,video,canvas{max-width:100%}
  .main{padding-inline:12px}
  .stat-card{padding:16px 13px}
 }
+
+/* Moonlit Sanctuary IV — mobile drawer interaction and keyboard reachability */
+@media(max-width:520px){
+ .sidebar{visibility:hidden;pointer-events:none;transition:transform .2s,visibility 0s linear .2s}
+ .menu-open .sidebar{visibility:visible;pointer-events:auto;transition:transform .2s,visibility 0s}
+ .sidebar{z-index:35}
+ .mobile-menu{position:relative;z-index:36}
+ .menu-open .mobile-menu{background:#392d47;color:var(--gold-bright);border-color:#a68a6d}
+}
+@media(max-width:520px) and (prefers-reduced-motion:reduce){
+ .sidebar,.menu-open .sidebar{transition:none}
+}
