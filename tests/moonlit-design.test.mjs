@@ -182,3 +182,11 @@ test('monitor waterfall uses recorded timestamps and nested RAG relationships',(
  assert.match(main,/renderMonitorWaterfall\(items\)/);
  assert.match(css,/\.monitor-waterfall-row\[data-nested="true"\]/);
 });
+
+test('performance insight excludes nested RAG from denominator',()=>{
+ assert.match(app,/id="monitor-performance-insights"/);
+ assert.match(main,/function renderMonitorPerformanceInsights\(groups\)/);
+ assert.match(main,/chain\.filter\(item=>!item\.parentStage/);
+ assert.match(main,/renderMonitorPerformanceInsights\(groups\)/);
+ assert.match(css,/\.monitor-insight-card\{/);
+});
