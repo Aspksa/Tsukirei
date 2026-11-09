@@ -656,3 +656,9 @@ img,svg,video,canvas{max-width:100%}
 .monitor-report-actions .ghost-button{flex-shrink:0}
 .monitor-report-status{font-size:11px;color:#bde6eb;min-height:1.3em;margin:5px 0 12px}
 @media(max-width:520px){.monitor-report-actions .ghost-button{width:100%}}
+
+/* Consistent accessible trace filter controls */
+.monitor-trace-picker select{min-height:38px;max-width:100%;border-radius:9px;border:1px solid #756184;background:#211b2e;color:#f4eff8;padding:7px 10px}
+.monitor-trace-picker select:focus-visible{outline:2px solid #f6dda6;outline-offset:3px}
+.monitor-trace-picker label{color:#cfc3d8;font-size:12px}
+@media(max-width:540px){.monitor-trace-picker{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.monitor-trace-picker select{flex:1 1 140px;min-width:0}}

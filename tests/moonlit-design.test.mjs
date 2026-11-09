@@ -198,3 +198,15 @@ test('privacy-first monitor report excludes targets and user payloads',()=>{
  assert.doesNotMatch(main.slice(main.indexOf('function monitorSafeReport'),main.indexOf("el('monitor-report-copy')")) ,/item\.prompt|item\.content|item\.target\s*\+/);
  assert.match(css,/\.monitor-report-actions\{/);
 });
+
+test('monitor stage filter applies to all diagnostics and clipboard report',()=>{
+ assert.match(app,/id="monitor-stage-filter"/);
+ assert.match(main,/function filteredMonitorSteps\(\)/);
+ assert.match(main,/filter==='errors'/);
+ assert.match(main,/filter==='slow'/);
+ assert.match(main,/filter==='rag'/);
+ assert.match(main,/filter==='storage'/);
+ assert.match(main,/const items=filteredMonitorSteps\(\)/);
+ assert.match(main,/monitor-stage-filter'\)\.addEventListener\('change',renderMonitorServerSteps\)/);
+ assert.match(css,/\.monitor-trace-picker select:focus-visible/);
+});
