@@ -209,28 +209,28 @@ async function cloudModels() {
     .map(item => item.id).filter((id): id is string => typeof id === 'string')
     .slice(0, 300);
 }
-type MonitorStep={id:number;at:string;stage:string;target:string;status:'ok'|'error';durationMs:number};
+type MonitorStep={id:number;traceId:string;at:string;stage:string;target:string;status:'ok'|'error';durationMs:number};
 const monitorSteps:MonitorStep[]=[];
 let monitorStepSequence=0;
-function monitorRecord(stage:string,target:string,status:'ok'|'error',started:number){
- monitorSteps.push({id:++monitorStepSequence,at:new Date().toISOString(),stage,target,status,durationMs:Math.max(0,Math.round(performance.now()-started))});
+function monitorRecord(traceId:string,stage:string,target:string,status:'ok'|'error',started:number){
+ monitorSteps.push({id:++monitorStepSequence,traceId,at:new Date().toISOString(),stage,target,status,durationMs:Math.max(0,Math.round(performance.now()-started))});
  if(monitorSteps.length>60)monitorSteps.splice(0,monitorSteps.length-60);
 }
-async function monitorStage<T>(stage:string,target:string,operation:()=>Promise<T>):Promise<T>{
+async function monitorStage<T>(traceId:string,stage:string,target:string,operation:()=>Promise<T>):Promise<T>{
  const started=performance.now();
- try{const result=await operation();monitorRecord(stage,target,'ok',started);return result;}
- catch(error){monitorRecord(stage,target,'error',started);throw error;}
+ try{const result=await operation();monitorRecord(traceId,stage,target,'ok',started);return result;}
+ catch(error){monitorRecord(traceId,stage,target,'error',started);throw error;}
 }
-async function chat(prompt: string, useMemory = true) {
+async function chat(prompt: string, useMemory = true, traceId = randomUUID()) {
   if (cloudBusy) throw new HttpError(429, 'Предыдущий запрос ещё выполняется');
   const cloud = readCloud();
   if (!cloud.apiKey || !cloud.model) throw new HttpError(400, 'В настройках укажите API-ключ и модель Cloud.ru');
   cloudBusy = true;
   try {
     living.touch();
-    const state = await monitorStage('Чтение истории','readState() → PostgreSQL или локальный JSON',()=>readState());
+    const state = await monitorStage(traceId,'Чтение истории','readState() → PostgreSQL или локальный JSON',()=>readState());
     const recent = state.messages.slice(-12).map(message => ({ role: message.role, content: message.content }));
-    const retrieved = useMemory ? await monitorStage('Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5))
+    const retrieved = useMemory ? await monitorStage(traceId,'Поиск памяти','askRag() → индекс RAG',()=>askRag(prompt,5))
       : {hits:[],mode:'lexical',cached:false};
     const grounded = useMemory ? smartContext(prompt,retrieved.hits) : {hits:[],context:'',budget:0};
     const context=grounded.context;
@@ -255,7 +255,7 @@ async function chat(prompt: string, useMemory = true) {
       ...recent,
       {role:'user',content:prompt}
     ];
-    const reply = await monitorStage('Ответ модели','Cloud.ru /chat/completions',()=>fetch(endpoint + '/chat/completions', {
+    const reply = await monitorStage(traceId,'Ответ модели','Cloud.ru /chat/completions',()=>fetch(endpoint + '/chat/completions', {
       method:'POST',
       headers:{Authorization:'Bearer '+cloud.apiKey,'Content-Type':'application/json'},
       body:JSON.stringify({model:cloud.model,messages,max_tokens:1200,stream:false}),
@@ -767,7 +767,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const input = await bodyJson(req);
     if (input.useMemory !== undefined && typeof input.useMemory !== 'boolean')
       throw new HttpError(400, 'useMemory должно быть boolean');
-    json(res, 200, await chat(requiredText(input.prompt, 'Сообщение', 8000), input.useMemory !== false)); return;
+    const traceId=randomUUID();
+    res.setHeader('X-Tsukirei-Trace-Id',traceId);
+    json(res, 200, await chat(requiredText(input.prompt, 'Сообщение', 8000), input.useMemory !== false, traceId)); return;
   }
   if (method === 'POST' && pathname === '/api/chat/clear') {
     await bodyJson(req);

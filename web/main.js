@@ -54,10 +54,10 @@ function brainTraceModule(path){
  if(path.startsWith('/api/chat'))return 'server/index.ts → чат';
  return 'server/index.ts → обработчик API';
 }
-function recordBrainRequest(path,method,status,duration){
+function recordBrainRequest(path,method,status,duration,traceId=''){
  const route=String(path).split('?')[0].split('#')[0];
  if(!route.startsWith('/api/'))return;
- brainRequestTrace.unshift({route,method,status,duration,at:new Date()});
+ brainRequestTrace.unshift({route,method,status,duration,traceId,at:new Date()});
  if(brainRequestTrace.length>BRAIN_TRACE_LIMIT)brainRequestTrace.length=BRAIN_TRACE_LIMIT;
  renderBrainRequestTrace();
 }
@@ -115,6 +115,7 @@ function renderBrainRequestTrace(){
   header.append(method,route,state);
   const detail=document.createElement('p');
   detail.textContent=entry.at.toLocaleTimeString('ru-RU')+' · '+entry.duration+' мс · '+brainTraceModule(entry.route);
+  if(entry.traceId)detail.textContent+=' · Цепочка '+entry.traceId.slice(0,8);
   row.append(header,detail);list.append(row);
  }
 }
@@ -132,7 +133,7 @@ async function api(path, options = {}) {
     recordBrainRequest(path,method,0,Math.round(performance.now()-started));
     throw new Error('Не удаётся подключиться к локальному серверу.');
   }
-  recordBrainRequest(path,method,res.status,Math.round(performance.now()-started));
+  recordBrainRequest(path,method,res.status,Math.round(performance.now()-started),res.headers.get('X-Tsukirei-Trace-Id')||'');
   let value;
   try { value = await res.json(); } catch { throw new Error('Сервер вернул некорректный ответ.'); }
   if (!res.ok) throw new Error(value.error || 'Ошибка запроса: ' + res.status);
@@ -758,6 +759,7 @@ function setMobileMenu(open){
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
 }
+let monitorServerStepCache=[];
 async function refreshMonitorServerSteps(){
  const list=el('monitor-server-steps');
  list.replaceChildren();
@@ -766,19 +768,15 @@ async function refreshMonitorServerSteps(){
   const result=await api('/api/monitor/steps');
   list.replaceChildren();
   const items=Array.isArray(result.items)?result.items.slice(-60).reverse():[];
-  if(!items.length){
-   const empty=document.createElement('p');empty.className='brain-trace-empty';
-   empty.textContent='Пока нет этапов. Отправьте сообщение в чат, затем обновите.';
-   list.append(empty);return;
-  }
-  for(const item of items){
-   const row=document.createElement('div');row.className='monitor-server-step';
-   const stage=document.createElement('strong');stage.textContent=String(item.stage||'Этап');
-   const target=document.createElement('code');target.textContent=String(item.target||'');
-   const detail=document.createElement('span');detail.textContent=String(item.durationMs)+' мс · '+new Date(item.at).toLocaleTimeString('ru-RU')+' · '+(item.status==='ok'?'Успешно':'Ошибка');
-   detail.dataset.ok=String(item.status==='ok');
-   row.append(stage,target,detail);list.append(row);
-  }
+  monitorServerStepCache=items;
+  const select=el('monitor-trace-select'),previous=select.value;
+  const traces=[...new Set(items.map(item=>item.traceId).filter(Boolean))];
+  select.replaceChildren();
+  const all=document.createElement('option');all.value='all';all.textContent='Все запросы';select.append(all);
+  for(const id of traces){const option=document.createElement('option');option.value=id;option.textContent='Цепочка '+id.slice(0,8);select.append(option);}
+  select.value=traces.includes(previous)?previous:'all';
+  renderMonitorServerSteps();
+
  }catch(error){
   list.replaceChildren();
   const message=document.createElement('p');message.className='brain-trace-empty';
@@ -786,6 +784,22 @@ async function refreshMonitorServerSteps(){
   list.append(message);
  }
 }
+function renderMonitorServerSteps(){
+ const list=el('monitor-server-steps'),selected=el('monitor-trace-select').value;
+ const items=monitorServerStepCache.filter(item=>selected==='all'||item.traceId===selected);
+ list.replaceChildren();
+ el('monitor-trace-count').textContent=items.length+' этапов';
+ if(!items.length){const empty=document.createElement('p');empty.className='brain-trace-empty';empty.textContent='Нет этапов для выбранной цепочки. Отправьте сообщение и обновите.';list.append(empty);return;}
+ for(const item of items){
+  const row=document.createElement('div');row.className='monitor-server-step';
+  const stage=document.createElement('strong');stage.textContent=String(item.stage||'Этап');
+  const target=document.createElement('code');target.textContent=String(item.target||'');
+  const detail=document.createElement('span');detail.textContent=String(item.durationMs)+' мс · '+new Date(item.at).toLocaleTimeString('ru-RU')+' · '+(item.status==='ok'?'Успешно':'Ошибка');
+  detail.dataset.ok=String(item.status==='ok');
+  row.append(stage,target,detail);list.append(row);
+ }
+}
+el('monitor-trace-select').addEventListener('change',renderMonitorServerSteps);
 el('monitor-server-refresh').addEventListener('click',refreshMonitorServerSteps);
 el('monitor-filter').addEventListener('change',renderBrainRequestTrace);
 el('brain-trace-clear').addEventListener('click',()=>{brainRequestTrace.length=0;renderBrainRequestTrace();});
