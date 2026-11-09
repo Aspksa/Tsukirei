@@ -317,3 +317,10 @@
 .brain-graph-detail p{color:#c1b5a2;font-size:11px;line-height:1.6;padding:6px 0;border-top:1px solid #44382b;overflow-wrap:anywhere}
 #brain-map-svg g[role="button"]{cursor:pointer;outline:none}
 #brain-map-svg g[role="button"]:focus-visible circle{stroke:#fff2c6;stroke-width:3}
+
+/* Knowledge map topic clusters: scrollable without overwhelming the main page. */
+.brain-topic-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
+.brain-topic-bar>span{color:var(--muted);font-size:11px;white-space:nowrap}
+.brain-topic-groups{display:flex;gap:7px;overflow-x:auto;max-width:100%;padding:3px 0}
+.brain-topic-button{flex:none;border:1px solid #40372d;background:#1d1a1b;color:#b8ad9d;border-radius:20px;padding:7px 11px;font-size:11px;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brain-topic-button[aria-pressed="true"]{background:#392b1a;border-color:#a17a43;color:#f1d19b}
