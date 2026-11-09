@@ -532,3 +532,21 @@ img,svg,video,canvas{max-width:100%}
 .brain-chart-caption{margin-top:9px;overflow-wrap:anywhere}
 @media(max-width:520px){.brain-growth-chart{padding:8px 6px;border-radius:14px}.brain-chart-head{align-items:flex-start}.brain-chart-head span{font-size:11px}}
 @media(prefers-contrast:more){.brain-chart-grid{stroke:#c9b7d0}.brain-chart-axis{fill:#fff}.brain-chart-bar{fill:#ffe2a6;stroke:#fff}.brain-growth-chart{border-color:#e3c6ef}}
+
+/* Moonlit Brain — live request flow, real browser-side API activity */
+.brain-trace{padding:24px;margin:20px 0}
+.brain-trace .brain-live-header h2{font-size:20px;margin-top:8px}
+.brain-trace-explain{font-size:12px;line-height:1.7;color:var(--muted);margin:12px 0}
+.brain-trace-flow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:16px 0}
+.brain-trace-flow span{background:linear-gradient(145deg,#30263f,#1b1927);border:1px solid #786086;border-radius:12px;padding:11px 15px;font-size:12px;color:#f2e6f6}
+.brain-trace-flow b{color:var(--gold);font-size:20px;font-weight:400}
+.brain-trace-list{display:grid;gap:8px;max-height:380px;overflow-y:auto;overscroll-behavior:contain;scrollbar-color:#75618a #171421}
+.brain-trace-entry{padding:12px 14px;border:1px solid #58476088;border-radius:12px;background:#1b1725}
+.brain-trace-entry-header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;min-width:0}
+.brain-trace-entry-header code{font-size:12px;color:#e8d9f3;overflow-wrap:anywhere;min-width:0}
+.brain-trace-method{font-size:10px;font-weight:750;letter-spacing:.08em;color:#edcc90;background:#493822;border-radius:6px;padding:4px 7px}
+.brain-trace-status{margin-left:auto;color:#f1aaa9;font-variant-numeric:tabular-nums;font-size:12px}
+.brain-trace-status[data-ok="true"]{color:#9ed4b9}
+.brain-trace-entry p{font-size:11px;color:var(--muted);line-height:1.6;margin-top:7px;overflow-wrap:anywhere}
+.brain-trace-empty{padding:22px;color:var(--muted);border:1px dashed #75618a;border-radius:12px;font-size:12px}
+@media(max-width:520px){.brain-trace{padding:16px}.brain-trace-flow{gap:7px}.brain-trace-flow span{padding:8px;font-size:11px}.brain-trace-entry{padding:11px}}
