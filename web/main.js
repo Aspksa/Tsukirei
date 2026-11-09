@@ -1,6 +1,6 @@
 'use strict';
 
-const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', settings: 'Настройки' };
+const pages = { home: 'Обзор', memory: 'Память', search: 'RAG и документы', tasks: 'Дела', agents: 'Агенты', soul: 'Личность', settings: 'Настройки' };
 const el = (id) => document.getElementById(id);
 const viewState = { notes: [], tasks: [], messages: [], settings: { configured: false, hasKey: false, model: '' }, database: { connected: false, engine: 'JSON (legacy)' } };
 let busy = false;
@@ -65,6 +65,7 @@ function go(page) {
   el('shell').classList.remove('menu-open');
   window.location.hash = page;
   if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
+  if (page === 'soul') globalThis.TsukireiSoulUI?.refresh();
 }
 function renderStatus() {
   const settings = viewState.settings;
@@ -147,7 +148,7 @@ function renderChat() {
   list.replaceChildren();
   if (!viewState.messages.length) {
     const empty = escapeNotNeeded('div', 'chat-welcome');
-    empty.append(escapeNotNeeded('span', '', '✦'), escapeNotNeeded('strong', '', 'Ваш диалог с Цукирэй'),
+    empty.append(escapeNotNeeded('span', '', '✦'), escapeNotNeeded('strong', '', 'Цукирэй на связи, хозяин'),
       escapeNotNeeded('p', '', 'Для ответа ИИ сохраните ключ и модель Cloud.ru в настройках.'));
     list.append(empty); return;
   }
@@ -155,6 +156,16 @@ function renderChat() {
     const bubble = escapeNotNeeded('div', 'message ' + (message.role === 'user' ? 'message-user' : 'message-ai'));
     bubble.append(escapeNotNeeded('small', '', message.role === 'user' ? 'Вы' : 'Цукирэй'));
     bubble.append(escapeNotNeeded('p', '', message.content));
+    if (message.role === 'assistant') {
+      const actions = escapeNotNeeded('div', 'soul-chat-feedback');
+      for (const [symbol,label,rating] of [['✓','Полезный ответ','positive'],['✎','Исправить ответ','negative']]) {
+        const button=escapeNotNeeded('button','soul-chat-feedback-button',symbol+' '+label);
+        button.type='button';button.setAttribute('aria-label',label);
+        button.addEventListener('click',()=>globalThis.TsukireiSoulUI?.feedback(message.id,rating));
+        actions.append(button);
+      }
+      bubble.append(actions);
+    }
     list.append(bubble);
   });
   if (chatSources.length) {

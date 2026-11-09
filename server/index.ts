@@ -500,6 +500,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === 'GET' && pathname === '/main.js') {
     staticFile(res, join(root, 'web', 'main.js'), 'text/javascript; charset=utf-8'); return;
   }
+  if (method === 'GET' && pathname === '/soul.js') {
+    staticFile(res, join(root, 'web', 'soul.js'), 'text/javascript; charset=utf-8'); return;
+  }
   if (method === 'GET' && pathname === '/mark.svg') {
     staticFile(res, join(root, 'web', 'mark.svg'), 'image/svg+xml'); return;
   }

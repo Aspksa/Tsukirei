@@ -66,3 +66,41 @@
 .rag-provider-form input:not([type=checkbox]){width:100%;min-width:0;padding:10px 12px;border-radius:9px;border:1px solid #42393a;background:#0a0d11;color:var(--text);font-size:12px}
 .rag-provider-form .gold-button{margin-top:13px}
 .rag-provider-form .subtle-divider{margin:12px 0}
+
+/* Soul Engine: meaningful information outside of the chat, no fake consciousness levels. */
+.soul-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(290px,.92fr);gap:20px;align-items:start}
+.soul-primary,.soul-sidebar{display:flex;flex-direction:column;gap:18px;min-width:0}
+.soul-identity{display:flex;align-items:center;gap:23px;padding:25px;min-width:0}
+.soul-identity h2{font-size:22px;margin:9px 0 11px;line-height:1.3}
+.soul-identity h2 em{font-weight:400;color:#c9a571}
+.soul-identity p{font-size:12px;line-height:1.8;color:#ada0a2}
+.soul-emblem{width:100px;height:100px;flex:0 0 100px;border:1px solid #5f4938;border-radius:50%;background:radial-gradient(circle,#675137 0%,#281e20 42%,#100d16 76%);box-shadow:0 0 50px #9b733528,inset 0 0 26px #a47a2330;display:grid;place-items:center;font-size:44px;color:#e5c189}
+.soul-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.soul-metric{padding:17px 14px;display:flex;flex-direction:column;gap:9px}
+.soul-metric small{color:#bfa172;font-size:9px;letter-spacing:1px}
+.soul-metric strong{font-size:29px;color:#e9d0a4;font-weight:500;font-variant-numeric:tabular-nums}
+.soul-metric span{font-size:10px;color:#968c90;line-height:1.5}
+.soul-section{padding:22px;min-width:0}
+.soul-section h2{font-size:17px;margin:0}
+.soul-section .list-heading{margin:0 0 11px}
+.soul-hint{color:#928991;font-size:11px;line-height:1.7;margin:6px 0 14px}
+.soul-list{display:flex;flex-direction:column;gap:9px;max-height:460px;overflow:auto}
+.soul-item{background:#17151c;border:1px solid #393039;border-radius:11px;padding:13px 14px;display:flex;gap:11px;justify-content:space-between;align-items:start;overflow-wrap:anywhere}
+.soul-item-main{min-width:0;display:flex;flex-direction:column;gap:7px}
+.soul-item strong{font-size:12px;color:#e3d1b5;line-height:1.5}
+.soul-item p{font-size:11px;color:#aba1a5;line-height:1.65}
+.soul-item small{font-size:10px;color:#827980}
+.soul-item-actions{display:flex;gap:6px;flex-wrap:wrap}
+.soul-item-actions button{cursor:pointer;border:1px solid #564736;background:#2d2525;color:#dbc49f;border-radius:8px;padding:7px 9px;font-size:10px}
+.soul-form{display:flex;flex-direction:column;gap:11px}
+.soul-form label:not(.soul-check){font-size:11px;color:#beb0b1}
+.soul-form input:not([type=checkbox]),.soul-form textarea,.soul-form select{min-width:0;width:100%;background:#0e0e15;border:1px solid #443739;border-radius:9px;color:#e8d5ba;padding:11px 12px;font:inherit;font-size:12px}
+.soul-form textarea{min-height:86px;resize:vertical}
+.soul-form .gold-button{align-self:stretch;margin-top:8px}
+.soul-check{display:flex;gap:9px;align-items:flex-start;font-size:11px;color:#c8b9b2;line-height:1.55;cursor:pointer}
+.soul-check input{accent-color:#c9a571;margin-top:2px}
+.soul-chat-feedback{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
+.soul-chat-feedback-button{border:1px solid #51413a;background:#262127;border-radius:8px;color:#d6ba92;font-size:10px;padding:5px 8px;cursor:pointer}
+.soul-chat-feedback-button:hover{background:#453629}
+@media(max-width:1020px){.soul-layout{grid-template-columns:1fr}.soul-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.soul-sidebar>*:last-child{grid-column:1/-1}}
+@media(max-width:740px){.soul-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.soul-sidebar{display:flex}.soul-identity{align-items:flex-start;gap:14px;padding:18px}.soul-emblem{width:66px;height:66px;flex-basis:66px;font-size:33px}.soul-identity h2{font-size:17px}.soul-section{padding:17px}}
