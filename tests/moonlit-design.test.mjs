@@ -173,3 +173,12 @@ test('RAG stages have dedicated source navigation and distinct visual encoding',
  assert.match(main,/button\.dataset\.kind=/);
  assert.match(css,/\.monitor-graph-node\[data-kind="rag"\]/);
 });
+
+test('monitor waterfall uses recorded timestamps and nested RAG relationships',()=>{
+ assert.match(app,/id="monitor-trace-waterfall"/);
+ assert.match(main,/function renderMonitorWaterfall\(items\)/);
+ assert.match(main,/Date\.parse\(item\.startedAt/);
+ assert.match(main,/item\.parentStage/);
+ assert.match(main,/renderMonitorWaterfall\(items\)/);
+ assert.match(css,/\.monitor-waterfall-row\[data-nested="true"\]/);
+});
