@@ -64,7 +64,7 @@ function go(page) {
   el('topbar-section').textContent = pages[page];
   el('shell').classList.remove('menu-open');
   window.location.hash = page;
-  if (page === 'search') refreshRagDocuments();
+  if (page === 'search') { refreshRagDocuments(); refreshRagEngine(); }
 }
 function renderStatus() {
   const settings = viewState.settings;
@@ -266,6 +266,110 @@ el('clear-chat').addEventListener('click', () => run(async () => {
 }));
 
 
+let ragProviderReady=false;
+let ragLastWorkerState=null;
+async function refreshRagEngine() {
+  const output=el('rag-engine-status');
+  try {
+    const answer=await api('/api/rag/engine');
+    const worker=answer.worker;
+    ragLastWorkerState=worker;
+    el('rag-engine-badge').textContent=worker.available ?
+      (worker.running?'Работает':worker.paused?'Пауза':'Локально') : 'Требуется PostgreSQL';
+    output.textContent=worker.available ?
+      (worker.error?'Ошибка индекса: '+worker.error:
+        worker.stage+' · '+worker.processed+'/'+worker.total+' обработано') :
+      'Фоновый индекс доступен после подключения PostgreSQL. Поиск по заметкам продолжает работать.';
+    el('rag-engine-stats').textContent=
+      (answer.index?'Записей: '+answer.index.records+' · Связей: '+answer.index.relations+' · ':'')+
+      'Кеш: '+answer.cache.entries+' · попаданий: '+answer.cache.hits+' · '+
+      'Внешних вызовов сегодня: '+answer.provider.requestsToday+'/'+answer.provider.maxCallsPerDay;
+    el('rag-engine-pause').disabled=!worker.available;
+    el('rag-engine-reindex').disabled=!worker.available;
+    el('rag-engine-pause').textContent=worker.paused?'Продолжить':'Приостановить';
+    if(!ragProviderReady){
+      const p=answer.provider;
+      el('rag-embeddings-enabled').checked=Boolean(p.embeddingsEnabled);
+      el('rag-auto-embed').checked=Boolean(p.autoEmbed);
+      el('rag-provider-endpoint').value=p.endpoint||'';
+      el('rag-provider-model').value=p.model||'endpoint-selected';
+      el('rag-rerank-enabled').checked=Boolean(p.rerankEnabled);
+      el('rag-rerank-endpoint').value=p.rerankEndpoint||'';
+      el('rag-rerank-model').value=p.rerankModel||'endpoint-selected';
+      el('rag-daily-limit').value=p.maxCallsPerDay||25;
+      el('rag-provider-key').placeholder=p.hasKey?'Ключ сохранён; оставить пустым':'Введите API-ключ';
+      el('rag-rerank-key').placeholder=p.hasRerankKey?'Ключ сохранён; оставить пустым':'Введите API-ключ';
+      ragProviderReady=true;
+    }
+  } catch(error){output.textContent='Ошибка RAG: '+error.message;}
+}
+el('rag-engine-refresh').addEventListener('click',()=>run(refreshRagEngine));
+el('rag-engine-reindex').addEventListener('click',()=>run(async()=>{
+  const response=await api('/api/rag/engine/reindex',{method:'POST',body:{}});
+  el('rag-engine-status').textContent='Обновление индекса поставлено в очередь.';
+  await refreshRagEngine();
+}));
+el('rag-engine-pause').addEventListener('click',()=>run(async()=>{
+  const paused=!ragLastWorkerState?.paused;
+  await api('/api/rag/engine/pause',{method:'POST',body:{paused}});
+  await refreshRagEngine();
+}));
+el('rag-curator-check').addEventListener('click',()=>run(async()=>{
+  const box=el('rag-curator-results');
+  box.replaceChildren(escapeNotNeeded('p','rag-hint','Проверка записей…'));
+  const result=await api('/api/rag/curator');
+  box.replaceChildren();
+  if(!result.items.length)box.append(escapeNotNeeded('p','rag-hint','Совпадений по проверяемым правилам не найдено.'));
+  const labels={duplicate:'Дубликат',possible_conflict:'Возможный конфликт',stale:'Проверить актуальность'};
+  for(const issue of result.items.slice(0,60)){
+    const item=escapeNotNeeded('div','rag-inspection-item');
+    item.append(escapeNotNeeded('strong','',labels[issue.type]||'Проверка'),
+      escapeNotNeeded('p','',issue.detail),
+      escapeNotNeeded('small','',issue.keys.join(' · ')));
+    box.append(item);
+  }
+}));
+el('rag-graph-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  run(async()=>{
+    const query=el('rag-graph-query').value.trim();
+    const result=await api('/api/rag/graph?q='+encodeURIComponent(query));
+    const box=el('rag-graph-results');box.replaceChildren();
+    if(!result.items.length)box.append(escapeNotNeeded('p','rag-hint','Подтверждённых текстом связей не найдено.'));
+    for(const relation of result.items.slice(0,60)){
+      const item=escapeNotNeeded('div','rag-inspection-item');
+      item.append(escapeNotNeeded('strong','',relation.subject+' · '+relation.relation+' · '+relation.object),
+        escapeNotNeeded('p','',relation.evidence),
+        escapeNotNeeded('small','','Источник: '+relation.source_key));
+      box.append(item);
+    }
+  });
+});
+el('rag-provider-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  run(async()=>{
+    const payload={
+      embeddingsEnabled:el('rag-embeddings-enabled').checked,
+      autoEmbed:el('rag-auto-embed').checked,
+      endpoint:el('rag-provider-endpoint').value.trim(),
+      model:el('rag-provider-model').value.trim(),
+      rerankEnabled:el('rag-rerank-enabled').checked,
+      rerankEndpoint:el('rag-rerank-endpoint').value.trim(),
+      rerankModel:el('rag-rerank-model').value.trim(),
+      maxCallsPerDay:Number(el('rag-daily-limit').value)
+    };
+    const embedKey=el('rag-provider-key').value.trim(),rerankKey=el('rag-rerank-key').value.trim();
+    if(embedKey)payload.apiKey=embedKey;
+    if(rerankKey)payload.rerankApiKey=rerankKey;
+    const answer=await api('/api/rag/provider',{method:'POST',body:payload});
+    el('rag-provider-key').value='';el('rag-rerank-key').value='';
+    ragProviderReady=false;
+    el('rag-provider-feedback').textContent='Настройки сохранены локально. Внешние вызовы: '+
+      (answer.settings.embeddingsEnabled||answer.settings.rerankEnabled?'разрешены по настройкам':'выключены');
+    await refreshRagEngine();
+  });
+});
+
 async function refreshRagDocuments() {
   const items = el('rag-document-list');
   if (!viewState.database.connected) {
@@ -308,7 +412,7 @@ el('rag-search-form').addEventListener('submit', event => {
     resultBox.replaceChildren(escapeNotNeeded('div', 'empty-state', 'Ищу по локальной памяти…'));
     const result = await api('/api/rag/search', { method: 'POST', body: { query, limit: 12 } });
     const matches = Array.isArray(result.items) ? result.items : [];
-    el('rag-results-meta').textContent = matches.length + ' найдено · ' + (result.mode === 'hybrid' ? 'Гибридный' : 'Лексический') + ' поиск';
+    el('rag-results-meta').textContent = matches.length + ' найдено · ' + (result.mode === 'hybrid' ? 'Гибридный' : 'Лексический') + ' поиск' + (result.cloudRequests ? ' · внешних вызовов: ' + result.cloudRequests : ' · без внешних вызовов');
     resultBox.replaceChildren();
     if (!matches.length) {
       resultBox.append(escapeNotNeeded('div', 'empty-state', 'Подходящих записей не найдено.'));
