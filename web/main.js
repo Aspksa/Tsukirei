@@ -796,6 +796,32 @@ function monitorStageSource(stage){
  if(stage==='Ответ модели')return 'server/index.ts · Cloud.ru API';
  return 'server/index.ts · обработчик';
 }
+function renderMonitorPerformanceInsights(groups){
+ const host=el('monitor-performance-insights');host.replaceChildren();
+ if(!groups.size){
+  const empty=document.createElement('p');empty.className='brain-trace-empty';
+  empty.textContent='Нет измерений для анализа. Отправьте сообщение в чат.';host.append(empty);return;
+ }
+ for(const [id,chain] of groups){
+  const top=chain.filter(item=>!item.parentStage&&Number.isFinite(Number(item.durationMs)));
+  const section=document.createElement('section');section.className='monitor-insight-card';
+  const title=document.createElement('strong');title.textContent='Цепочка '+id.slice(0,8);
+  section.append(title);
+  if(!top.length){
+   const empty=document.createElement('p');empty.textContent='Нет измеренных основных этапов.';section.append(empty);host.append(section);continue;
+  }
+  const longest=top.reduce((a,b)=>Number(a.durationMs)>=Number(b.durationMs)?a:b);
+  const total=top.reduce((sum,item)=>sum+Math.max(0,Number(item.durationMs)),0);
+  const note=document.createElement('p');
+  note.textContent='Самый длительный измеренный этап: '+String(longest.stage||'Этап')+' · '+String(longest.durationMs)+' мс';
+  const share=document.createElement('span');share.className='monitor-insight-share';
+  share.textContent=total>0?Math.round(Number(longest.durationMs)/total*100)+'% суммы основных этапов':'Недостаточно данных';
+  section.append(note,share);
+  const caveat=document.createElement('small');
+  caveat.textContent='Доля от суммы измеренных основных этапов, не от полного времени ответа. Вложенные этапы не учитываются повторно.';
+  section.append(caveat);host.append(section);
+ }
+}
 function renderMonitorWaterfall(items){
  const host=el('monitor-trace-waterfall');host.replaceChildren();
  const groups=new Map();
@@ -806,6 +832,7 @@ function renderMonitorWaterfall(items){
   if(!groups.has(id))groups.set(id,[]);
   groups.get(id).push({...item,start});
  }
+ renderMonitorPerformanceInsights(groups);
  if(!groups.size){
   const empty=document.createElement('p');empty.className='brain-trace-empty';
   empty.textContent='Временная шкала появится после новых запросов чата.';host.append(empty);return;
@@ -827,7 +854,7 @@ function renderMonitorWaterfall(items){
    const bar=document.createElement('div');bar.className='monitor-waterfall-bar';
    bar.dataset.ok=String(item.status==='ok');
    bar.style.left=((item.start-min)/span*100)+'%';
-   bar.style.width=Math.max(0.5,Math.min(100,Number(item.durationMs)||0)/span*100)+'%';
+   bar.style.width=Math.max(0.5,Math.min(100-((item.start-min)/span*100),Math.max(0,Number(item.durationMs)||0)/span*100))+'%';
    bar.title=String(item.stage||'Этап')+' · '+String(item.durationMs)+' мс';
    track.append(bar);
    const duration=document.createElement('span');duration.className='monitor-waterfall-duration';duration.textContent=String(item.durationMs)+' мс';
