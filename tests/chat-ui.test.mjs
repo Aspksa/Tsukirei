@@ -47,3 +47,11 @@ test('chat v3 search remains local and renders safe DOM highlights',()=>{
  assert.match(js,/previousScroll\+list\.scrollHeight-previousHeight/);
  assert.match(css,/\.chat-search\[hidden\]\{display:none!important\}/);
 });
+
+test('chat search keeps scrolling scoped to its message viewport',()=>{
+ assert.match(js,/list\.scrollTo\(\{top:Math\.max\(0,target\)/);
+ assert.doesNotMatch(js,/chatSearchMatches\[chatSearchIndex\]\.scrollIntoView/);
+ assert.match(js,/applyChatSearch\(\{navigate:false\}\)/);
+ assert.match(js,/applyChatSearch\(\{navigate:true\}\)/);
+ assert.match(js,/updateChatCounter\(\);\s*proactiveSuggestions/);
+});
