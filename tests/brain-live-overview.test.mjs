@@ -15,3 +15,10 @@ test('brain page renders metrics and an accessible topology',()=>{
  assert.match(ui,/createElementNS\(ns,tag\)/);
  assert.match(ui,/if \(page === 'brain'\)/);
 });
+
+test('knowledge map reads real local graph and supports keyboard inspection',()=>{
+ for(const id of ['brain-graph-query','brain-graph-search','brain-graph-overview','brain-graph-detail'])assert.ok(html.includes('id="'+id+'"'));
+ assert.match(ui,/api\/cognition\/world/);
+ assert.match(ui,/refreshBrainKnowledge\(\)/);
+ assert.match(ui,/group\.addEventListener\('keydown'/);
+});
