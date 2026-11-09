@@ -110,3 +110,15 @@ test('live API monitor is a dedicated sidebar page, not embedded in brain',()=>{
  assert.ok(monitorStart>=0 && monitorStart<brainStart);
  assert.ok(traceStart>monitorStart && traceStart<brainStart);
 });
+
+test('monitor insights derive only from actual local request trace',()=>{
+ assert.match(app,/id="monitor-stats"/);
+ assert.match(app,/id="monitor-filter"/);
+ assert.match(app,/id="monitor-timeline"/);
+ assert.match(main,/const failures=brainRequestTrace\.filter/);
+ assert.match(main,/brainRequestTrace\.reduce\(\(sum,e\)=>sum\+e\.duration/);
+ assert.match(main,/const filtered=brainRequestTrace\.filter/);
+ assert.match(main,/el\('monitor-filter'\)\.addEventListener\('change',renderBrainRequestTrace\)/);
+ assert.match(main,/bar\.dataset\.error=String/);
+ assert.match(css,/\.monitor-timeline-bar\{/);
+});
