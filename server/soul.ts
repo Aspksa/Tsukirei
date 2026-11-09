@@ -34,6 +34,7 @@ type SoulData = {
   updatedAt:string;
   growth?:{lastReviewedAt:string|null;reviews:number;history:Array<{at:string;summary:string;signals:{chats:number;positive:number;negative:number;lessons:number;preferences:number};sourceIds:string[]}>};
   feedbackEvents?:FeedbackEvent[];
+  reflectionGoals?:{lastRunAt:string|null;history:Array<{at:string;goalId:string;title:string;reason:string;sourceIds:string[];state:'observing'|'needs-review'}>};
   outreach?:{lastPreparedAt:string|null;items:Array<{id:string;at:string;title:string;reason:string;sourceIds:string[];status:'pending'|'dismissed'}>};
 };
 
@@ -64,7 +65,7 @@ function empty():SoulData {
     metrics:{chatsObserved:0,positiveFeedback:0,negativeFeedback:0,appliedCorrections:0,completedTasks:0},
     seenMessages:[],seenTasks:[],recurring:[],updatedAt:new Date().toISOString(),
     growth:{lastReviewedAt:null,reviews:0,history:[]},feedbackEvents:[],
-    outreach:{lastPreparedAt:null,items:[]}
+    outreach:{lastPreparedAt:null,items:[]},reflectionGoals:{lastRunAt:null,history:[]}
   };
 }
 function validate(value:unknown):SoulData {
@@ -77,6 +78,7 @@ function validate(value:unknown):SoulData {
   // Backward-compatible upgrade of early v0.9 personality archives.
   if(!Array.isArray(state.seenTasks))state.seenTasks=[];
   if(!Array.isArray(state.feedbackEvents))state.feedbackEvents=[];
+  if(!state.reflectionGoals||!Array.isArray(state.reflectionGoals.history))state.reflectionGoals={lastRunAt:null,history:[]};
   if(!state.outreach||!Array.isArray(state.outreach.items))state.outreach={lastPreparedAt:null,items:[]};
   if(!state.growth||!Array.isArray(state.growth.history))state.growth={lastReviewedAt:null,reviews:0,history:[]};
   if(typeof state.metrics.completedTasks!=='number')state.metrics.completedTasks=0;
@@ -166,6 +168,46 @@ export class SoulEngine {
   }
   qualityReport(){
     return feedbackQuality(this.data.feedbackEvents??[]);
+  }
+  reflectionGoalReport(){
+    const goals=this.data.reflectionGoals??{lastRunAt:null,history:[]};
+    return {lastRunAt:goals.lastRunAt,history:goals.history.slice(0,30),
+      policy:'Гипотезы строятся локально из подтверждённых сигналов; изменения модели и внешние действия не выполняются.'};
+  }
+  async reflectOnGoals(now=new Date()){
+    return this.modify(()=>{
+      if(!this.data.settings.reflectionsEnabled)return {created:0,reason:'Рефлексия отключена'};
+      const state:NonNullable<SoulData['reflectionGoals']>=this.data.reflectionGoals??{lastRunAt:null,history:[]};
+      const last=Date.parse(state.lastRunAt??'');
+      if(Number.isFinite(last)&&now.getTime()-last<24*86400000)
+        return {created:0,reason:'Проверка уже выполнена'};
+      state.lastRunAt=now.toISOString();
+      const candidates:Array<{goalId:string;title:string;reason:string;sourceIds:string[]}>= [];
+      const feedback=(this.data.feedbackEvents??[]).filter(e=>e.rating==='negative'&&
+        Number.isFinite(Date.parse(e.at))&&now.getTime()>=Date.parse(e.at)&&
+        now.getTime()-Date.parse(e.at)<30*86400000);
+      if(feedback.length>=2)candidates.push({goalId:'quality',
+        title:'Проверить причины отрицательных оценок',
+        reason:'Несколько ответов получили отрицательную оценку; требуется проверка причин, а не автоматическая смена характера.',
+        sourceIds:[...new Set(feedback.map(e=>e.sourceId))].slice(0,8)});
+      for(const hint of HINTS){
+        const rows=this.data.recurring.filter(x=>x.topic===hint.topic&&
+          now.getTime()>=Date.parse(x.at)&&now.getTime()-Date.parse(x.at)<30*86400000);
+        const ids=[...new Set(rows.map(x=>x.messageId))];
+        if(ids.length>=2)candidates.push({goalId:'topic:'+hint.topic,
+          title:hint.title,reason:hint.reason,sourceIds:ids.slice(-8)});
+      }
+      let created=0;
+      for(const item of candidates){
+        const previous=state.history.find(x=>x.goalId===item.goalId);
+        if(previous&&now.getTime()-Date.parse(previous.at)<7*86400000)continue;
+        state.history.unshift({at:now.toISOString(),...item,state:'needs-review'});
+        created++;
+      }
+      state.history=state.history.slice(0,60);
+      this.data.reflectionGoals=state;
+      return {created,goals:state.history.slice(0,5)};
+    });
   }
   outreachInbox(){
     return {items:(this.data.outreach?.items??[]).filter(i=>i.status==='pending').slice(0,10),
