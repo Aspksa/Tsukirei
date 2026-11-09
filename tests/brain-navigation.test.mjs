@@ -19,3 +19,16 @@ test('all legacy brain sections remain available without data migration',()=>{
  assert.match(html,/id="page-brain"/);
  assert.match(main,/brainPages\.has\(page\)/);
 });
+
+test('brain workspace groups knowledge, identity and learning without removing legacy views',()=>{
+ for(const heading of ['Память и RAG','Личность и сверхразум','Развитие и мышление'])assert.ok(html.includes(heading));
+ assert.equal((html.match(/class="glass-panel brain-workspace"/g)??[]).length,3);
+ for(const page of ['memory','search','soul','supermind','living','cognition']){
+  assert.match(html,new RegExp('data-page="'+page+'"'));
+ }
+});
+test('navigation guards against absent panels and handles browser history',()=>{
+ assert.match(main,/if \(!section\) continue/);
+ assert.match(main,/addEventListener\('hashchange'/);
+ assert.match(main,/window\.location\.hash !== '#' \+ page/);
+});
