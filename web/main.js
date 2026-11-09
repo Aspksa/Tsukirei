@@ -776,20 +776,7 @@ async function refreshMonitorServerSteps(){
   for(const id of traces){const option=document.createElement('option');option.value=id;option.textContent='Цепочка '+id.slice(0,8);select.append(option);}
   select.value=traces.includes(previous)?previous:'all';
   renderMonitorServerSteps();
-  return;
-  if(!items.length){
-   const empty=document.createElement('p');empty.className='brain-trace-empty';
-   empty.textContent='Пока нет этапов. Отправьте сообщение в чат, затем обновите.';
-   list.append(empty);return;
-  }
-  for(const item of items){
-   const row=document.createElement('div');row.className='monitor-server-step';
-   const stage=document.createElement('strong');stage.textContent=String(item.stage||'Этап');
-   const target=document.createElement('code');target.textContent=String(item.target||'');
-   const detail=document.createElement('span');detail.textContent=String(item.durationMs)+' мс · '+new Date(item.at).toLocaleTimeString('ru-RU')+' · '+(item.status==='ok'?'Успешно':'Ошибка');
-   detail.dataset.ok=String(item.status==='ok');
-   row.append(stage,target,detail);list.append(row);
-  }
+
  }catch(error){
   list.replaceChildren();
   const message=document.createElement('p');message.className='brain-trace-empty';
