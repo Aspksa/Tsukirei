@@ -640,3 +640,11 @@ img,svg,video,canvas{max-width:100%}
 .monitor-waterfall-duration{font-size:11px;color:#cbbbd4;text-align:right;font-variant-numeric:tabular-nums}
 .monitor-waterfall-note{margin:8px 0 18px;line-height:1.6}
 @media(max-width:520px){.monitor-trace-waterfall{padding:10px}.monitor-waterfall-row{grid-template-columns:minmax(75px,110px) minmax(65px,1fr) 48px;gap:5px}.monitor-waterfall-label,.monitor-waterfall-duration{font-size:10px}}
+
+/* Performance diagnosis — evidence-backed, never full-response estimates */
+.monitor-performance-insights{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:12px;margin:12px 0}
+.monitor-insight-card{display:flex;flex-direction:column;gap:9px;padding:15px;background:linear-gradient(135deg,#30233f,#201a2d);border:1px solid #756184;border-radius:14px;min-width:0}
+.monitor-insight-card strong{color:#f0d5a0;font-size:12px;letter-spacing:.03em}
+.monitor-insight-card p{color:#f4eff8;font-size:13px;line-height:1.5;margin:0}
+.monitor-insight-share{align-self:flex-start;color:#bde6eb;background:#243c47;border:1px solid #6999a6;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700}
+.monitor-insight-card small{color:#b8b0c4;font-size:11px;line-height:1.5}
