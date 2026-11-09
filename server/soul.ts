@@ -492,6 +492,61 @@ export class SoulEngine {
       return {reviewed:true,event};
     });
   }
+  unifiedDecisionReport(now=new Date()){
+    const settings=this.data.settings;
+    const policy='Рекомендации только для просмотра: не выполнять задачи, не менять цели и не считать предложения подтверждёнными.';
+    if(!settings.personalContext)return {enabled:false,generatedAt:now.toISOString(),items:[],top:null,policy};
+    type Candidate={kind:string;id:string;title:string;priority:number;reason:string;nextStep:string;sourceIds:string[]};
+    const items:Candidate[]=[];
+    const recent=(this.data.feedbackEvents??[]).filter(e=>{
+      const age=now.getTime()-Date.parse(e.at);
+      return e.rating==='negative'&&age>=0&&age<30*86400000;
+    });
+    if(recent.length>=2){
+      const sources=[...new Set(recent.map(e=>e.sourceId))].slice(0,5);
+      items.push({kind:'feedback',id:'negative-feedback',title:'Проверить качество ответов',priority:100,
+        reason:'Есть минимум две отрицательные оценки за последние 30 дней',
+        nextStep:'Проверить конкретные ответы и запросить уточнение, прежде чем менять поведение',
+        sourceIds:sources});
+    }
+    if(settings.initiativeEnabled){
+      const commitments=new Map((this.data.commitments??[]).map(x=>[x.id,x]));
+      for(const watch of this.data.commitmentWatch?.items??[]){
+        const commitment=commitments.get(watch.commitmentId);
+        if(watch.status!=='pending'||commitment?.status!=='accepted')continue;
+        items.push({kind:'commitment',id:watch.id,title:commitment.title.slice(0,180),priority:85,
+          reason:watch.reason,nextStep:'Уточнить статус обязательства у владельца',
+          sourceIds:[watch.sourceId]});
+      }
+      if(settings.reflectionsEnabled){
+        const goals=new Map((this.data.plannedGoals??[]).map(x=>[x.id,x]));
+        for(const review of this.data.planReviews?.items??[]){
+          if(review.status!=='pending'||goals.get(review.goalId)?.status!=='active')continue;
+          items.push({kind:'plan-review',id:review.id,title:goals.get(review.goalId)!.title.slice(0,180),priority:75,
+            reason:review.reason,nextStep:review.proposedStep.slice(0,180)+' — только после одобрения',
+            sourceIds:[review.sourceId]});
+        }
+      }
+    }
+    for(const goal of this.data.plannedGoals??[]){
+      if(goal.status!=='active')continue;
+      const pending=goal.steps.find(s=>s.status==='pending');
+      if(!pending)continue;
+      items.push({kind:'goal',id:goal.id,title:goal.title.slice(0,180),priority:55,
+        reason:'Активная цель: '+goal.steps.filter(s=>s.status==='completed').length+' из '+goal.steps.length+' шагов подтверждены',
+        nextStep:'Предложить проверить следующий шаг: '+pending.title.slice(0,140),
+        sourceIds:[goal.sourceId]});
+    }
+    for(const commitment of this.data.commitments??[]){
+      if(commitment.status!=='accepted')continue;
+      items.push({kind:'accepted-commitment',id:commitment.id,title:commitment.title.slice(0,180),priority:45,
+        reason:'Принятое обязательство ещё не подтверждено как выполненное',
+        nextStep:'Уточнить прогресс, не утверждая выполнение',sourceIds:[commitment.sourceId]});
+    }
+    items.sort((a,b)=>b.priority-a.priority||a.kind.localeCompare(b.kind)||a.id.localeCompare(b.id));
+    return {enabled:true,generatedAt:now.toISOString(),items:items.slice(0,30),
+      top:items[0]??null,policy};
+  }
   experienceDecision(now=new Date()){
     const settings=this.data.settings;
     if(!settings.personalContext)return {enabled:false,focus:'текущий запрос',mood:'спокойный',
@@ -778,10 +833,11 @@ export class SoulEngine {
     if(!withMemory||!this.data.settings.personalContext)return base;
     const world=this.innerWorld();
     const decision=this.experienceDecision();
+    const unified=this.unifiedDecisionReport().top;
     const evolution=this.characterEvolutionReport();
     const commitments=this.commitmentReport().items.filter(x=>x.status==='accepted').slice(0,3);
     const profile=this.personalityProfile();
-    return base+(commitments.length?'\nПринятые, но не завершённые обязательства (не утверждай, что они выполнены): '+commitments.map(x=>x.title.slice(0,120)).join('; ')+'.':'')+(evolution.activeStrategy?'\nПроверенная стратегия общения: '+evolution.activeStrategy+'.':'')+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
+    return base+(unified?'\nРекомендованный приоритет (не команда): '+unified.title+'. Следующий шаг: '+unified.nextStep+'.':'')+(commitments.length?'\nПринятые, но не завершённые обязательства (не утверждай, что они выполнены): '+commitments.map(x=>x.title.slice(0,120)).join('; ')+'.':'')+(evolution.activeStrategy?'\nПроверенная стратегия общения: '+evolution.activeStrategy+'.':'')+'\nТекущий приоритет поведения: '+decision.focus+'. Следующий безопасный шаг: '+decision.nextStep+'. '+decision.guidance+'\nЛичный контекст: '+world.identity.philosophy+'. Моделируемое настроение: '+world.emotionalModel.mood+'. Подтверждённых важных событий: '+world.autobiography.length+'. Не выдумывай обещания, мечты и воспоминания.\nУстойчивое самоописание: '+profile.name+' — '+profile.identity+
       '. Ценности: '+profile.character.values.join(', ')+
       '. Модель настроения (стиль ответа, не чувства): '+profile.emotionalModel.mood+
       '. История и опыт отражены в подтверждённых предпочтениях и уроках. '+
