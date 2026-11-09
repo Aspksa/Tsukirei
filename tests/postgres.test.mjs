@@ -101,6 +101,11 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   assert.equal((await api(first.base,'/api/rag/documents/'+docId,'DELETE')).status,404);
   const bad = await api(first.base, '/api/knowledge', 'POST', { content: 'invalid', embedding: [Infinity, NaN] });
   assert.equal(bad.status, 400);
+  const persistent=await api(first.base,'/api/rag/documents','POST',{
+    title:'Долговременное хранение',content:'Текст должен сохраняться после перезапуска',
+    source:'persistence.md'
+  });
+  assert.equal(persistent.status,201);
   first.child.kill();
   await new Promise(resolve => first.child.once('exit', resolve));
   const second = await start();
@@ -108,5 +113,8 @@ test('PostgreSQL + pgvector migration, transaction safety and knowledge search',
   const persisted = await api(second.base, '/api/state');
   assert.equal(persisted.data.tasks.length, 12);
   assert.equal(persisted.data.notes.length, 1);
+  const docsAfterRestart=await api(second.base,'/api/rag/documents');
+  assert.equal(docsAfterRestart.status,200);
+  assert.ok(docsAfterRestart.data.items.some(doc=>doc.id===persistent.data.document.id));
   assert.equal(readdirSync(join(dir, 'backups')).filter(name => name.endsWith('.json')).length, 1, 'Migration should not repeat');
 });
