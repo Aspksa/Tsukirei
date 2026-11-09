@@ -620,6 +620,7 @@ window.addEventListener('hashchange',()=>{
 });
 el('orb-open').addEventListener('click', () => go('memory'));
 function setMobileMenu(open){
+ if(open && !el('chat-panel').hidden) { toggleChat(false); el('mobile-menu').focus(); }
  el('shell').classList.toggle('menu-open',open);
  el('mobile-menu').setAttribute('aria-expanded',String(open));
  el('mobile-menu').setAttribute('aria-label',open?'Закрыть меню':'Открыть меню');
@@ -632,6 +633,8 @@ document.addEventListener('pointerdown',event=>{
 });
 document.addEventListener('keydown',event=>{
  if(event.key!=='Escape'||!el('shell').classList.contains('menu-open'))return;
+ event.preventDefault();
+ event.stopImmediatePropagation();
  setMobileMenu(false);
  el('mobile-menu').focus();
 });
@@ -690,6 +693,7 @@ el('check-cloud').addEventListener('click', () => run(async () => {
 }));
 
 function toggleChat(open) {
+  if (open && el('shell').classList.contains('menu-open')) setMobileMenu(false);
   el('chat-panel').hidden = !open;
   el('chat-toggle').setAttribute('aria-expanded', String(open));
   if (open) { renderChat(); el('chat-input').focus(); }
@@ -723,7 +727,7 @@ el('chat-jump').addEventListener('click',()=>{el('chat-thread').scrollTo({top:el
 updateChatCounter();
 el('chat-close').addEventListener('click', () => toggleChat(false));
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !el('chat-panel').hidden) toggleChat(false);
+  if (event.key === 'Escape' && !el('chat-panel').hidden) { event.preventDefault(); toggleChat(false); }
   if (event.ctrlKey && event.key.toLowerCase() === 'k') { event.preventDefault(); toggleChat(el('chat-panel').hidden); }
 });
 el('chat-input').addEventListener('keydown', event => {
